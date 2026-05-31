@@ -22,6 +22,7 @@ import {
   IconClipboardCopy,
   IconCopy,
   IconDots,
+  IconDownload,
   IconInfoCircle,
   IconLink,
   IconPencil,
@@ -50,15 +51,13 @@ import { DriveContextMenu } from '../components/drive/DriveContextMenu'
 import { DriveGrid } from '../components/drive/DriveGrid'
 import { DriveSidebar } from '../components/drive/DriveSidebar'
 import { DriveToolbar } from '../components/drive/DriveToolbar'
-import { FloatingUploadPanel } from '../components/drive/FloatingUploadPanel'
-import { MediaPreviewModal } from '../components/drive/MediaPreviewModal'
 import { NodePropertiesModal } from '../components/drive/NodePropertiesModal'
 import { useAppContext } from '../App'
 import { ShareLinkDialog } from '../components/drive/ShareLinkDialog'
 import { copyTextToClipboard } from '../lib/clipboard'
 import { FileTypeIcon } from '../lib/fileTypeIcon'
 import * as driveApi from '../lib/driveApi'
-import { getMediaPreviewKind, type MediaPreviewKind } from '../lib/mediaPreview'
+import { getMediaPreviewKind } from '../lib/mediaPreview'
 import type { BreadcrumbItem, DriveNode, FolderTreeItem } from '../types/node'
 
 function formatBytes(n: number): string {
@@ -268,9 +267,16 @@ function NodeTableRow({
           {node.is_folder ? (
             '—'
           ) : (
-            <Anchor size="sm" href={driveApi.downloadUrl(node.id)} onClick={(e) => e.stopPropagation()}>
-              点击下载
-            </Anchor>
+            <ActionIcon
+              variant="subtle"
+              color="blue"
+              size="sm"
+              component="a"
+              href={driveApi.downloadUrl(node.id)}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
+              <IconDownload size={16} />
+            </ActionIcon>
           )}
         </Table.Td>
       )}
@@ -365,7 +371,7 @@ function NodeTableRow({
 }
 
 export function DrivePage() {
-  const { isMobile, sidebarOpen, toggleSidebar } = useAppContext()
+  const { isMobile, sidebarOpen, toggleSidebar, setPreview, setMediaFiles, setUploadItems, uploadItems } = useAppContext()
   const [rootId, setRootId] = useState<string | null>(null)
   const [nav, setNav] = useState<{ stack: string[]; index: number } | null>(null)
   const [rows, setRows] = useState<DriveNode[]>([])
@@ -374,7 +380,6 @@ export function DrivePage() {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [isFileDragActive, setIsFileDragActive] = useState(false)
-  const [uploadItems, setUploadItems] = useState<UploadItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<DriveNode[]>([])
   const [clipboardNode, setClipboardNode] = useState<{ nodeId: string; nodeName: string } | null>(null)
@@ -395,10 +400,6 @@ export function DrivePage() {
     y: 0,
     targetId: null,
   })
-  const [mediaPreview, setMediaPreview] = useState<{
-    node: DriveNode
-    kind: MediaPreviewKind
-  } | null>(null)
   const [propertiesNode, setPropertiesNode] = useState<DriveNode | null>(null)
   const [reparsingMeta, setReparsingMeta] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
@@ -1077,8 +1078,9 @@ export function DrivePage() {
       notifications.show({ color: 'gray', message: '不支持预览该格式' })
       return
     }
-    setMediaPreview({ node, kind })
-  }, [])
+    setPreview({ node, kind })
+    setMediaFiles(rows.filter((r) => !r.is_folder && getMediaPreviewKind(r.name) != null))
+  }, [setPreview, setMediaFiles, rows])
 
   const reparseMeta = useCallback(async (node: DriveNode) => {
     setReparsingMeta(true)
@@ -1106,7 +1108,7 @@ export function DrivePage() {
       const kind = getMediaPreviewKind(node.name)
       if (kind) {
         e.preventDefault()
-        setMediaPreview({ node, kind })
+        setPreview({ node, kind })
         return
       }
       window.open(driveApi.downloadUrl(node.id), '_blank', 'noopener,noreferrer')
@@ -1129,11 +1131,6 @@ export function DrivePage() {
       }
     })()
   }
-
-  const onRemoveUploadItem = useCallback((id: string) => {
-    setUploadItems((prev) => prev.filter((x) => x.id !== id))
-    uploadControllersRef.current.delete(id)
-  }, [])
 
   const onPickFiles = useCallback((files: FileList | null) => {
     if (!files?.length || !folderId) return
@@ -1194,7 +1191,7 @@ export function DrivePage() {
       }
       refresh()
     })
-  }, [folderId, refresh])
+  }, [folderId, refresh, setUploadItems])
 
   const handleToggleFavorite = useCallback(
     async (node: DriveNode) => {
@@ -1533,7 +1530,7 @@ export function DrivePage() {
                 }
                 onPreview={(p) => {
                   closeContextMenu()
-                  setMediaPreview(p)
+                  setPreview(p)
                 }}
                 onDownload={(node) => {
                   closeContextMenu()
@@ -1601,8 +1598,6 @@ export function DrivePage() {
         </Box>
           </Box>
         </DndContext>
-        <FloatingUploadPanel items={uploadItems} onRemove={onRemoveUploadItem} />
-        <MediaPreviewModal preview={mediaPreview} onClose={() => setMediaPreview(null)} />
         {collabDialog && (
           <CollaboratorDialog
             folderId={collabDialog.folderId}

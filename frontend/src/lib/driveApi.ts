@@ -108,7 +108,7 @@ export async function logout(): Promise<void> {
 
 export async function me(): Promise<{ username: string; is_admin: boolean }> {
   const res = await api.get('/auth/me')
-  return unwrap<{ username: string }>(res.data)
+  return unwrap<{ username: string; is_admin: boolean }>(res.data)
 }
 
 // Collaborator APIs

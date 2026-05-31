@@ -30,10 +30,6 @@ export function FloatingUploadPanel({
       radius="md"
       withBorder
       style={{
-        position: 'fixed',
-        bottom: 20,
-        right: 20,
-        zIndex: 300,
         width: 360,
         maxHeight: collapsed ? undefined : 320,
         overflow: 'hidden',
