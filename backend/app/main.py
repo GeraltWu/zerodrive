@@ -56,6 +56,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ZeroDrive API", lifespan=lifespan)
+
+# Increase upload limits from Starlette defaults (1 MB)
+from starlette.formparsers import MultiPartParser
+MultiPartParser.max_part_size = 1024 * 1024 * 1024  # 1 GB per part
+MultiPartParser.spool_max_size = 10 * 1024 * 1024  # 10 MB in-memory
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,

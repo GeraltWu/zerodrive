@@ -1,7 +1,12 @@
 /backend/data/files
 /backend/.env
 backend/**/__pycache__/
-/backend/data/.db
+
+*.db
+*.sqlite
+*.sqlite3
+backend/data/*.db
+
 *.pyc
 .venv/
 /frontend/node_modules/
