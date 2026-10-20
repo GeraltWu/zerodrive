@@ -67,7 +67,7 @@ docker compose logs --tail=100 backend
 curl http://127.0.0.1:8600/api/health
 ```
 
-健康检查应返回 `status: ok`。后端每次启动会先执行数据库迁移；首次构建需要从网络下载 Docker 基础镜像、Python 依赖和 FFmpeg，因此会比后续构建更久。宝塔专用 Compose 默认通过阿里云 Debian 镜像安装 FFmpeg，并在构建阶段执行 `ffprobe -version` 校验。
+健康检查应返回 `status: ok`。后端每次启动会先执行数据库迁移；首次构建需要从网络下载 Docker 基础镜像、Python 依赖和 FFmpeg，因此会比后续构建更久。宝塔专用 Compose 默认通过阿里云 Debian 镜像安装 FFmpeg、通过阿里云 PyPI 镜像安装 Python 包，并在构建阶段执行 `ffprobe -version` 校验。
 
 ### 使用宝塔 Docker GUI 创建 Compose 项目
 
@@ -230,6 +230,8 @@ curl -i http://127.0.0.1:8600/api/health
 curl -i https://zerodrive.wuziran.fun/api/health
 ```
 
+- 构建日志长期显示某个 `sha256` 层为 `0B / xxMB`：这是 Docker Hub 基础镜像拉取失败，还没有执行项目 Dockerfile。进入“Docker → 设置 → 修改加速 URL”，选择或填写可用的镜像加速地址，保存并重启 Docker；然后在“镜像”页面预先拉取 `python:3.11-slim-bookworm`、`node:22-alpine` 和 `nginx:alpine`，三者完成后再重新构建 Compose 项目。
+- 构建日志长期停在 `Downloading ...whl`：这是 Python 包下载缓慢。确认使用的是 `docker-compose.baota.yml`，其中已通过 `PIP_INDEX_URL` 配置阿里云 PyPI 镜像；覆盖最新 `backend/Dockerfile` 和 Compose 文件后重新构建。
 - 公网返回 502：检查两个容器状态，并从服务器本机访问 `127.0.0.1:8600`。
 - 上传返回 413：检查宝塔站点与容器内 Nginx 的 `client_max_body_size`。
 - 大文件上传中断：检查两层 Nginx 的请求体和代理超时。

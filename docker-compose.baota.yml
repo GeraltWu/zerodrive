@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         DEBIAN_MIRROR: mirrors.aliyun.com
+        PIP_INDEX_URL: https://mirrors.aliyun.com/pypi/simple/
     container_name: zerodrive-backend
     env_file:
       - /www/wwwroot/zerodrive/.env
