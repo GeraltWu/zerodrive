@@ -11,7 +11,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 确保已安装 `pyproject.toml` 中的依赖（例如在 conda 环境中 `pip install -e .`）。
-另外，媒体元数据抽取依赖 `ffprobe`（FFmpeg 套件的一部分），部署机器需要确保可直接执行 `ffprobe -version`。
+媒体元数据抽取依赖 `ffprobe`（FFmpeg 套件的一部分）。Docker 镜像会自动安装并校验它；直接运行后端时，需要在宿主机安装并确保可执行 `ffprobe -version`。
 
 ## 环境变量
 

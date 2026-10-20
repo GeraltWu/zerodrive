@@ -3,12 +3,13 @@ import hmac
 import time
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+from pwdlib import PasswordHash
 
 from app.core.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+password_hasher = PasswordHash.recommended()
 
 
 def create_access_token(subject: str) -> str:
@@ -31,11 +32,27 @@ def decode_access_token(token: str) -> str | None:
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return password_hasher.hash(password)
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
-    return pwd_context.verify(plain_password, password_hash)
+    if password_hash.startswith("$argon2"):
+        try:
+            return password_hasher.verify(plain_password, password_hash)
+        except (TypeError, ValueError):
+            return False
+
+    # Existing ZeroDrive installations used passlib's plain bcrypt hashes.
+    # bcrypt historically ignored bytes after byte 72, so preserve that
+    # behavior only while verifying legacy hashes.
+    if password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            candidate = plain_password.encode("utf-8")[:72]
+            return bcrypt.checkpw(candidate, password_hash.encode("ascii"))
+        except (TypeError, ValueError, UnicodeError):
+            return False
+
+    return False
 
 
 def _download_sig_payload(node_id: str, exp: int) -> bytes:

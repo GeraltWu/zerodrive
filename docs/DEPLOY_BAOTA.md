@@ -67,7 +67,7 @@ docker compose logs --tail=100 backend
 curl http://127.0.0.1:8600/api/health
 ```
 
-健康检查应返回 `status: ok`。后端每次启动会先执行数据库迁移；首次构建需要从网络下载 Docker 基础镜像和依赖。
+健康检查应返回 `status: ok`。后端每次启动会先执行数据库迁移；首次构建需要从网络下载 Docker 基础镜像、Python 依赖和 FFmpeg，因此会比后续构建更久。宝塔专用 Compose 默认通过阿里云 Debian 镜像安装 FFmpeg，并在构建阶段执行 `ffprobe -version` 校验。
 
 ### 使用宝塔 Docker GUI 创建 Compose 项目
 

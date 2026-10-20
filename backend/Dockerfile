@@ -1,15 +1,17 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
+
+ARG DEBIAN_MIRROR=deb.debian.org
 
 WORKDIR /app
 
-# 安装系统依赖（bcrypt 需要编译工具）
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libc6-dev \
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && ffprobe -version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --disable-pip-version-check -r requirements.txt
 
 COPY . .
 

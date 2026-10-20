@@ -3,6 +3,8 @@ services:
     build:
       context: /www/wwwroot/zerodrive/backend
       dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: mirrors.aliyun.com
     container_name: zerodrive-backend
     env_file:
       - /www/wwwroot/zerodrive/.env
