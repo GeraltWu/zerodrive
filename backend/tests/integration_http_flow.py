@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import shutil
 import sys
 import uuid
+import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,6 +25,7 @@ def main() -> None:
                 "ADMIN_PASSWORD": "integration-password",
                 "JWT_SECRET": "integration-only-long-random-secret",
                 "JWT_EXPIRE_MINUTES": "60",
+                "SESSION_COOKIE_SECURE": "false",
                 "BOT_DOWNLOAD_EXPIRE_SECONDS": "300",
             }
         )
@@ -56,6 +59,19 @@ def main() -> None:
             assert upload.status_code == 200, upload.text
             node_id = upload.json()["data"]["id"]
 
+            folder = client.post(
+                "/api/nodes/folder",
+                json={"parent_id": root_id, "name": "bundle"},
+            )
+            assert folder.status_code == 200, folder.text
+            folder_id = folder.json()["data"]["id"]
+            nested_upload = client.post(
+                "/api/nodes/upload",
+                data={"parent_id": folder_id},
+                files={"file": ("nested.txt", b"nested", "text/plain")},
+            )
+            assert nested_upload.status_code == 200, nested_upload.text
+
             authenticated_download = client.get(f"/api/nodes/{node_id}/download")
             assert authenticated_download.status_code == 200
             assert authenticated_download.content == b"hello"
@@ -64,12 +80,60 @@ def main() -> None:
                 protected_download = anonymous.get(f"/api/nodes/{node_id}/download")
                 assert protected_download.status_code == 401
 
+                direct_link = client.put(f"/api/nodes/{node_id}/direct-download")
+                assert direct_link.status_code == 200, direct_link.text
+                direct_url = direct_link.json()["data"]["url"]
+                repeated_direct_link = client.put(f"/api/nodes/{node_id}/direct-download")
+                assert repeated_direct_link.json()["data"]["url"] == direct_url
+                anonymous_direct_download = anonymous.get(direct_url)
+                assert anonymous_direct_download.status_code == 200
+                assert anonymous_direct_download.content == b"hello"
+                invalid_direct_download = anonymous.get(
+                    f"/api/nodes/{node_id}/download?key=invalid"
+                )
+                assert invalid_direct_download.status_code == 404
+
+                anonymous_batch = anonymous.get(
+                    "/api/nodes/batch-download",
+                    params=[("ids", node_id)],
+                )
+                assert anonymous_batch.status_code == 401
+                anonymous_manifest = anonymous.get(
+                    "/api/nodes/download-manifest",
+                    params=[("ids", node_id)],
+                )
+                assert anonymous_manifest.status_code == 401
+
+                manifest = client.get(
+                    "/api/nodes/download-manifest",
+                    params=[("ids", node_id), ("ids", folder_id)],
+                )
+                assert manifest.status_code == 200, manifest.text
+                assert manifest.json()["data"] == [
+                    {"node_id": node_id, "path": "payload.txt", "size": 5},
+                    {
+                        "node_id": nested_upload.json()["data"]["id"],
+                        "path": "bundle/nested.txt",
+                        "size": 6,
+                    },
+                ]
+
+                batch = client.get(
+                    "/api/nodes/batch-download",
+                    params=[("ids", node_id), ("ids", folder_id)],
+                )
+                assert batch.status_code == 200, batch.text
+                assert batch.headers["content-type"].startswith("application/zip")
+                with zipfile.ZipFile(io.BytesIO(batch.content)) as archive:
+                    assert archive.read("payload.txt") == b"hello"
+                    assert archive.read("bundle/nested.txt") == b"nested"
+
                 share = client.post(f"/api/share-links/{node_id}", json={})
                 assert share.status_code == 200, share.text
                 token = share.json()["data"]["token"]
-                direct_download = anonymous.get(f"/api/public/share/{token}/download")
-                assert direct_download.status_code == 200
-                assert direct_download.content == b"hello"
+                share_download = anonymous.get(f"/api/public/share/{token}/download")
+                assert share_download.status_code == 200
+                assert share_download.content == b"hello"
 
                 random_file = anonymous.get(
                     "/api/bot/random-file",
@@ -83,7 +147,7 @@ def main() -> None:
                 assert signed_download.status_code == 200
                 assert signed_download.content == b"hello"
 
-        print("HTTP flow OK: cookie auth, public direct link, and Bot signed URL")
+        print("HTTP flow OK: auth, anonymous direct link, batch ZIP, share, and Bot URL")
     finally:
         shutil.rmtree(root, ignore_errors=True)
         try:

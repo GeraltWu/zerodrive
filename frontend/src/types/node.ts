@@ -11,6 +11,12 @@ export interface DriveNode {
   updated_at: string
 }
 
+export interface DownloadManifestItem {
+  node_id: string
+  path: string
+  size: number
+}
+
 export interface Collaborator {
   id: string
   folder_id: string

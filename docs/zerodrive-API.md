@@ -408,7 +408,7 @@ Authorization: Bearer <access_token>
 
 ### 3.7 `GET /api/nodes/{node_id}/download`
 
-**说明：** 下载文件流；要求有效的浏览器会话 Cookie 或 `Authorization: Bearer <access_token>`，并检查节点访问权限；支持 Range（`206`）便于音视频拖动。
+**说明：** 下载文件流。普通请求需要有效的浏览器会话 Cookie 或 `Authorization: Bearer <access_token>`，并检查节点访问权限；携带由 3.7.1 生成的正确 `key` 时可匿名下载。支持 Range（`206`）便于音视频拖动。
 
 **输入（Path）：**
 
@@ -420,7 +420,61 @@ Authorization: Bearer <access_token>
 
 **输出：** 非 JSON 包络。成功时为二进制流：`Content-Type: application/octet-stream`，`Content-Disposition: attachment; filename="..."`。失败可能为 **400**（不能下载文件夹）、**404**（无内容）等，错误体格式以实际响应为准。
 
-需要对外公开且点击即下载的链接时，创建分享链接后使用 `GET /api/public/share/{token}/download`。QQ Bot 使用第 4.5 节的短期签名下载地址。
+对外分享时应发送前端分享页 `/s/{token}`，访客在分享页中点击下载。`GET /api/public/share/{token}/download` 是分享页使用的下载端点；QQ Bot 使用第 4.5 节的短期签名下载地址。
+
+#### 3.7.1 `PUT /api/nodes/{node_id}/direct-download`
+
+**说明：** 为文件获取或创建稳定的匿名下载直链。调用此接口需要登录并对文件具有管理权限；返回的下载地址本身不需要登录。同一文件重复调用时复用原有地址，不创建分享记录。
+
+**输出：**
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "url": "/api/nodes/550e8400-e29b-41d4-a716-446655440000/download?key=<random-token>"
+  }
+}
+```
+
+`url` 可直接打开下载，任何获得该地址的人都可访问文件。
+
+#### 3.7.2 `GET /api/nodes/batch-download`
+
+**说明：** 将一个或多个文件、文件夹打包为 ZIP 并以流式响应下载。需要有效的浏览器会话 Cookie 或 `Authorization: Bearer <access_token>`；服务端会检查每个所选节点的访问权限，文件夹会递归展开。一次最多选择 100 个顶层项目。
+
+**输入（Query）：** 重复传递 `ids` 参数。
+
+```http
+GET /api/nodes/batch-download?ids=<node-id-1>&ids=<node-id-2>
+```
+
+**输出：** 非 JSON 包络。成功时为 `Content-Type: application/zip` 的下载流。ZIP 使用无压缩打包，以降低服务器 CPU 和内存占用；文件内容会边读取边发送，不会先把整个压缩包加载到内存。
+
+#### 3.7.3 `GET /api/nodes/download-manifest`
+
+**说明：** 为前端逐文件下载队列展开所选文件和文件夹。需要登录并检查节点访问权限；一次最多选择 100 个顶层项目，递归结果最多包含 1000 个文件。
+
+**输入（Query）：** 与批量 ZIP 相同，重复传递 `ids` 参数。
+
+**输出：**
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "data": [
+    {
+      "node_id": "550e8400-e29b-41d4-a716-446655440000",
+      "path": "Documents/example.txt",
+      "size": 1024
+    }
+  ]
+}
+```
+
+`path` 是文件在本次下载目录中的相对路径。支持 File System Access API 的浏览器会按该路径创建目录并逐个写入文件。
 
 ---
 

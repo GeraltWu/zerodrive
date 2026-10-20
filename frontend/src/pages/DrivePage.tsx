@@ -3,6 +3,7 @@ import type { RefObject } from 'react'
 import {
   ActionIcon,
   Anchor,
+  Badge,
   Box,
   Button,
   Drawer,
@@ -35,7 +36,10 @@ import {
 import {
   type CollisionDetection,
   DndContext,
+  DragOverlay,
   type DragStartEvent,
+  type Modifier,
+  type Modifiers,
   PointerSensor,
   pointerWithin,
   useDraggable,
@@ -44,7 +48,6 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
 import { CollaboratorDialog } from '../components/drive/CollaboratorDialog'
 import { DriveContentPane, type SortDir, type SortKey, type UploadItem, type ViewMode } from '../components/drive/DriveContentPane'
 import { DriveContextMenu } from '../components/drive/DriveContextMenu'
@@ -86,10 +89,109 @@ function toDropTargetFolderId(dropId: string): string | null {
   return null
 }
 
+const placeOverlayNextToPointer: Modifier = ({
+  activatorEvent,
+  activeNodeRect,
+  overlayNodeRect,
+  transform,
+}) => {
+  if (!activatorEvent || !activeNodeRect || !('clientX' in activatorEvent)) return transform
+  const pointerEvent = activatorEvent as PointerEvent
+  const grabOffsetX = pointerEvent.clientX - activeNodeRect.left
+  const grabOffsetY = pointerEvent.clientY - activeNodeRect.top
+  return {
+    ...transform,
+    x: transform.x + grabOffsetX + 8,
+    y: transform.y + grabOffsetY - (overlayNodeRect?.height ?? 44) / 2,
+  }
+}
+
+const dragOverlayModifiers: Modifiers = [placeOverlayNextToPointer]
+
+function MultiDragOverlay({ nodes }: { nodes: DriveNode[] }) {
+  const first = nodes[0]
+  if (!first) return null
+  const count = nodes.length
+  const folderCount = nodes.filter((node) => node.is_folder).length
+  const fileCount = count - folderCount
+  const detail = count === 1
+    ? first.is_folder ? '移动文件夹' : '移动文件'
+    : [folderCount > 0 ? `${folderCount} 个文件夹` : '', fileCount > 0 ? `${fileCount} 个文件` : '']
+        .filter(Boolean)
+        .join(' · ')
+
+  return (
+    <Box
+      w={220}
+      maw="calc(100vw - 32px)"
+      pos="relative"
+      style={{ cursor: 'grabbing' }}
+    >
+      {count > 2 && (
+        <Paper
+          withBorder
+          radius="md"
+          pos="absolute"
+          inset={0}
+          style={{ transform: 'translate(6px, 6px)', opacity: 0.38 }}
+        />
+      )}
+      {count > 1 && (
+        <Paper
+          withBorder
+          radius="md"
+          pos="absolute"
+          inset={0}
+          style={{ transform: 'translate(3px, 3px)', opacity: 0.66 }}
+        />
+      )}
+      <Paper
+        withBorder
+        radius="md"
+        shadow="xl"
+        px={8}
+        py={7}
+        pos="relative"
+        style={{
+          background: 'color-mix(in srgb, var(--mantine-color-body) 94%, var(--mantine-color-blue-1))',
+          borderColor: 'var(--mantine-color-blue-5)',
+        }}
+      >
+        <Group gap={8} wrap="nowrap">
+          <Box
+            style={{
+              width: 28,
+              height: 28,
+              flexShrink: 0,
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: 'var(--mantine-radius-md)',
+              background: 'var(--mantine-color-blue-light)',
+            }}
+          >
+            <FileTypeIcon node={first} size={17} />
+          </Box>
+          <Box style={{ flex: 1, minWidth: 0 }}>
+            <Text size="xs" fw={600} truncate>{first.name || '文件夹'}</Text>
+            <Text size="10px" c="dimmed" truncate>{detail}</Text>
+          </Box>
+          {count > 1 && (
+            <Badge circle size="md" variant="filled" color="blue" aria-label={`共 ${count} 项`}>
+              {count}
+            </Badge>
+          )}
+        </Group>
+      </Paper>
+    </Box>
+  )
+}
+
 function NodeTableRow({
   node,
   onEnterFolder,
   onDownload,
+  onQueueDownload,
+  onBatchDownload,
   onRename,
   onDelete,
   isNameEditing,
@@ -100,6 +202,7 @@ function NodeTableRow({
   onNameEditCancel,
   nameInputRef,
   selected,
+  dragGroupActive,
   onRowClick,
   onRowContextMenu,
   onRowDoubleClick,
@@ -107,7 +210,7 @@ function NodeTableRow({
   onProperties,
   showOwner,
   onCopyNode,
-  onCopyDirectLink,
+  onCopyDownloadLink,
   onToggleFavorite,
   isFavorited,
   onCreateShareLink,
@@ -117,6 +220,8 @@ function NodeTableRow({
   node: DriveNode
   onEnterFolder: (n: DriveNode) => void
   onDownload: (n: DriveNode) => void
+  onQueueDownload: (n: DriveNode) => void
+  onBatchDownload: (n: DriveNode) => void
   onRename: (n: DriveNode) => void
   onDelete: (n: DriveNode) => void
   isNameEditing: boolean
@@ -127,6 +232,7 @@ function NodeTableRow({
   onNameEditCancel: () => void
   nameInputRef: RefObject<HTMLInputElement | null>
   selected: boolean
+  dragGroupActive: boolean
   onRowClick: (e: React.MouseEvent, node: DriveNode) => void
   onRowContextMenu: (e: React.MouseEvent, node: DriveNode) => void
   onRowDoubleClick: (e: React.MouseEvent, node: DriveNode) => void
@@ -134,7 +240,7 @@ function NodeTableRow({
   onProperties: (n: DriveNode) => void
   showOwner: boolean
   onCopyNode: (n: DriveNode) => void
-  onCopyDirectLink: (n: DriveNode) => void
+  onCopyDownloadLink: (n: DriveNode) => void
   onToggleFavorite: (n: DriveNode) => void
   isFavorited: boolean
   onCreateShareLink: (n: DriveNode) => void
@@ -155,13 +261,13 @@ function NodeTableRow({
   const ref = useMergedRef(drag.setNodeRef, drop.setNodeRef)
 
   const style = {
-    transform: CSS.Translate.toString(drag.transform),
-    opacity: drag.isDragging ? 0.6 : 1,
+    opacity: dragGroupActive ? 0.32 : 1,
     background: drop.isOver
       ? 'var(--mantine-color-blue-light)'
       : selected
         ? 'var(--mantine-color-blue-light)'
         : undefined,
+    transition: 'opacity 120ms ease, background-color 120ms ease',
   }
 
   return (
@@ -271,16 +377,35 @@ function NodeTableRow({
           {node.is_folder ? (
             '—'
           ) : (
-            <ActionIcon
-              variant="subtle"
-              color="blue"
-              size="sm"
-              component="a"
-              href={driveApi.downloadUrl(node.id)}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-            >
-              <IconDownload size={16} />
-            </ActionIcon>
+            <Group gap={2} wrap="nowrap">
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                size="sm"
+                component="a"
+                href={driveApi.downloadUrl(node.id)}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                aria-label={`下载 ${node.name}`}
+                title="下载"
+              >
+                <IconDownload size={16} />
+              </ActionIcon>
+              {canShare && (
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    onCopyDownloadLink(node)
+                  }}
+                  aria-label={`复制 ${node.name} 的匿名下载直链`}
+                  title="复制匿名下载直链"
+                >
+                  <IconCopy size={16} />
+                </ActionIcon>
+              )}
+            </Group>
           )}
         </Table.Td>
       )}
@@ -301,17 +426,19 @@ function NodeTableRow({
               </Menu.Item>
             )}
             {!node.is_folder && (
-              <Menu.Item leftSection={<IconUpload size={14} />} onClick={() => onDownload(node)}>
+              <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onDownload(node)}>
                 下载
               </Menu.Item>
             )}
-            {!node.is_folder && canShare && (
-              <Menu.Item
-                leftSection={<IconCopy size={14} />}
-                onClick={() => onCopyDirectLink(node)}
-              >
-                创建公开下载直链
-              </Menu.Item>
+            {node.is_folder && (
+              <>
+                <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onQueueDownload(node)}>
+                  逐个下载
+                </Menu.Item>
+                <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onBatchDownload(node)}>
+                  打包为 ZIP
+                </Menu.Item>
+              </>
             )}
             <Menu.Item
               leftSection={<IconCopy size={14} />}
@@ -369,7 +496,7 @@ function NodeTableRow({
 }
 
 export function DrivePage() {
-  const { isMobile, sidebarOpen, toggleSidebar, setPreview, setMediaFiles, setUploadItems, uploadItems } = useAppContext()
+  const { isMobile, sidebarOpen, toggleSidebar, setPreview, setPreviewCollapsed, setMediaFiles, setUploadItems, uploadItems, startDownloadQueue } = useAppContext()
   const [rootId, setRootId] = useState<string | null>(null)
   const [nav, setNav] = useState<{ stack: string[]; index: number } | null>(null)
   const [rows, setRows] = useState<DriveNode[]>([])
@@ -509,6 +636,11 @@ export function DrivePage() {
     () => selectedIds.map((id) => rowsById.get(id)).filter((n): n is DriveNode => !!n),
     [selectedIds, rowsById],
   )
+  const draggedNodes = useMemo(
+    () => draggingNodeIds.map((id) => rowsById.get(id)).filter((node): node is DriveNode => !!node),
+    [draggingNodeIds, rowsById],
+  )
+  const draggingSet = useMemo(() => new Set(draggingNodeIds), [draggingNodeIds])
   const contextMenuTargetNode = useMemo(() => {
     const tid = contextMenu.targetId
     if (!tid) return null
@@ -981,6 +1113,30 @@ export function DrivePage() {
     })
   }, [refresh, selectedNodes])
 
+  const handleBatchDownload = useCallback((nodes: DriveNode[]) => {
+    if (nodes.length === 0) return
+    if (nodes.length > 100) {
+      notifications.show({ color: 'red', message: '一次最多下载 100 个项目' })
+      return
+    }
+    const anchor = document.createElement('a')
+    anchor.href = driveApi.batchDownloadUrl(nodes.map((node) => node.id))
+    anchor.download = ''
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }, [])
+
+  const handleQueueDownload = useCallback((nodes: DriveNode[]) => {
+    if (nodes.length === 0) return
+    if (nodes.length > 100) {
+      notifications.show({ color: 'red', message: '一次最多选择 100 个项目' })
+      return
+    }
+    void startDownloadQueue(nodes.map((node) => node.id))
+  }, [startDownloadQueue])
+
   const handleRowClick = useCallback(
     (e: React.MouseEvent, node: DriveNode) => {
       if (editingNodeId === node.id) return
@@ -1073,8 +1229,9 @@ export function DrivePage() {
       return
     }
     setPreview({ node, kind })
+    setPreviewCollapsed(false)
     setMediaFiles(rows.filter((r) => !r.is_folder && getMediaPreviewKind(r.name) != null))
-  }, [setPreview, setMediaFiles, rows])
+  }, [setPreview, setPreviewCollapsed, setMediaFiles, rows])
 
   const reparseMeta = useCallback(async (node: DriveNode) => {
     setReparsingMeta(true)
@@ -1103,11 +1260,13 @@ export function DrivePage() {
       if (kind) {
         e.preventDefault()
         setPreview({ node, kind })
+        setPreviewCollapsed(false)
+        setMediaFiles(rows.filter((row) => !row.is_folder && getMediaPreviewKind(row.name) != null))
         return
       }
       window.open(driveApi.downloadUrl(node.id), '_blank', 'noopener,noreferrer')
     },
-    [editingNodeId, navigateTo, setPreview],
+    [editingNodeId, navigateTo, rows, setMediaFiles, setPreview, setPreviewCollapsed],
   )
 
   const newFolder = () => {
@@ -1225,15 +1384,15 @@ export function DrivePage() {
     setShareLinkDialog({ nodeId: node.id, nodeName: node.name })
   }, [])
 
-  const handleCopyDirectLink = useCallback(async (node: DriveNode) => {
+  const handleCopyDownloadLink = useCallback(async (node: DriveNode) => {
     try {
-      const link = await driveApi.createShareLink(node.id)
-      const copied = await copyTextToClipboard(driveApi.absoluteShareDownloadUrl(link.token))
+      const directUrl = await driveApi.ensureDirectDownloadUrl(node.id)
+      const copied = await copyTextToClipboard(directUrl)
       notifications.show({
-        color: copied ? 'green' : 'yellow',
+        color: copied ? 'green' : 'red',
         message: copied
-          ? '公开下载直链已创建并复制，可在「分享链接」中停用'
-          : '直链已创建，请到「分享链接」页面复制',
+          ? '匿名下载直链已复制，任何获得此地址的人都可以下载'
+          : '复制失败，请手动复制',
       })
     } catch {
       // API interceptor 已显示具体错误。
@@ -1489,6 +1648,8 @@ export function DrivePage() {
                 node={n}
                 onEnterFolder={enterFolder}
                 onDownload={doDownload}
+                onQueueDownload={(node) => handleQueueDownload([node])}
+                onBatchDownload={(node) => handleBatchDownload([node])}
                 onRename={startRename}
                 onDelete={doDelete}
                 isNameEditing={editingNodeId === n.id}
@@ -1499,6 +1660,7 @@ export function DrivePage() {
                 onNameEditCancel={cancelNameEdit}
                 nameInputRef={nameInputRef}
                 selected={selectedSet.has(n.id)}
+                dragGroupActive={draggingSet.has(n.id)}
                 onRowClick={handleRowClick}
                 onRowContextMenu={handleRowContextMenu}
                 onRowDoubleClick={handleRowDoubleClick}
@@ -1506,7 +1668,7 @@ export function DrivePage() {
                 onProperties={setPropertiesNode}
                 showOwner={isSharedFolder}
                 onCopyNode={handleCopyNode}
-                onCopyDirectLink={(node) => void handleCopyDirectLink(node)}
+                onCopyDownloadLink={(node) => void handleCopyDownloadLink(node)}
                 onToggleFavorite={handleToggleFavorite}
                 isFavorited={favoriteIds.has(n.id)}
                 onCreateShareLink={handleCreateShareLink}
@@ -1548,14 +1710,20 @@ export function DrivePage() {
                 onPreview={(p) => {
                   closeContextMenu()
                   setPreview(p)
+                  setPreviewCollapsed(false)
+                  setMediaFiles(rows.filter((row) => !row.is_folder && getMediaPreviewKind(row.name) != null))
                 }}
                 onDownload={(node) => {
                   closeContextMenu()
                   doDownload(node)
                 }}
-                onCopyLink={(node) => {
+                onQueueDownload={(node) => {
                   closeContextMenu()
-                  void handleCopyDirectLink(node)
+                  handleQueueDownload(node ? [node] : selectedNodes)
+                }}
+                onBatchDownload={(node) => {
+                  closeContextMenu()
+                  handleBatchDownload(node ? [node] : selectedNodes)
                 }}
                 onCopyName={(node) => {
                   closeContextMenu()
@@ -1608,6 +1776,13 @@ export function DrivePage() {
           />
         </Box>
           </Box>
+          <DragOverlay
+            zIndex={500}
+            modifiers={dragOverlayModifiers}
+            dropAnimation={{ duration: 180, easing: 'cubic-bezier(.2, .8, .2, 1)' }}
+          >
+            <MultiDragOverlay nodes={draggedNodes} />
+          </DragOverlay>
         </DndContext>
         {collabDialog && (
           <CollaboratorDialog

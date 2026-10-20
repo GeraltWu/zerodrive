@@ -9,6 +9,7 @@
 - 缩略图预览（图片网格模式下使用服务端缩略图接口）
 - 文件夹协作（邀请用户为 viewer / editor / admin）
 - Bot 随机文件接口（支持 image / audio / video，精确文件匹配或文件夹内随机）
+- 文件夹与多选下载（流式 ZIP，或逐文件队列下载并显示实时进度）
 
 ## 启动命令
 
@@ -34,6 +35,8 @@ python scripts/migrate.py
 ## Docker 部署
 
 使用宝塔面板、Docker Compose、HTTPS 反向代理部署时，参见 [ZeroDrive 宝塔面板 Docker 部署](docs/DEPLOY_BAOTA.md)。
+
+使用宝塔分开部署前后端时，参见 [ZeroDrive 宝塔面板分开部署](docs/DEPLOY_BAOTA_STANDALONE.md)。其中的 SPA 路由回退配置用于避免分享页 `/s/<token>` 直接打开时返回 404。
 
 ## 新功能
 1. 添加最左边工具栏，放置需要切换页面的功能

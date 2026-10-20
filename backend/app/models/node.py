@@ -32,6 +32,9 @@ class Node(Base):
     blob: Mapped["Blob | None"] = relationship("Blob", foreign_keys=[blob_id])
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     meta_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    direct_download_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     owner_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("users.id", ondelete="RESTRICT"),

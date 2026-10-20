@@ -1,15 +1,18 @@
 import asyncio
+import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, OptionalCurrentUser
 from app.db.session import AsyncSessionLocal, get_db
+from app.models.node import Node
 from app.models.storage import Blob, StorageBackend
 from app.schemas.node import FolderCreateBody, MoveBody, RenameBody
 from app.schemas.response import ok
 from app.services import node_service
+from app.services.batch_download import build_batch_download_response, build_download_manifest
 from app.services.node_download import build_node_download_response
 from app.services.storage_drivers import get_driver
 
@@ -50,6 +53,25 @@ async def search(
     return ok([r.model_dump(mode="json") for r in items]).model_dump()
 
 
+@router.get("/batch-download")
+async def batch_download(
+    ids: Annotated[list[str], Query(min_length=1, max_length=100)],
+    user: CurrentUser,
+    db: Db,
+):
+    return await build_batch_download_response(db, ids, user.id)
+
+
+@router.get("/download-manifest")
+async def download_manifest(
+    ids: Annotated[list[str], Query(min_length=1, max_length=100)],
+    user: CurrentUser,
+    db: Db,
+) -> dict:
+    items = await build_download_manifest(db, ids, user.id)
+    return ok(items).model_dump()
+
+
 @router.get("/{node_id}/breadcrumb")
 async def breadcrumb(
     node_id: str,
@@ -82,9 +104,51 @@ async def upload(
 
 
 @router.get("/{node_id}/download")
-async def download(node_id: str, request: Request, user: CurrentUser, db: Db):
-    await node_service.get_node(db, node_id, user.id)
+async def download(
+    node_id: str,
+    request: Request,
+    user: OptionalCurrentUser,
+    db: Db,
+    key: str | None = None,
+):
+    node = await db.get(Node, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    has_valid_direct_key = bool(
+        key
+        and node.direct_download_token
+        and secrets.compare_digest(key, node.direct_download_token)
+    )
+    if not has_valid_direct_key:
+        if not user:
+            if key:
+                raise HTTPException(status_code=404, detail="下载地址无效")
+            raise HTTPException(status_code=401, detail="未登录")
+        await node_service.get_node(db, node_id, user.id)
+
     return await build_node_download_response(db, node_id, request)
+
+
+@router.put("/{node_id}/direct-download")
+async def ensure_direct_download(node_id: str, user: CurrentUser, db: Db) -> dict:
+    node = await db.get(Node, node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    await node_service._check_access(db, node, user.id, min_role="admin")
+    if node.is_folder:
+        raise HTTPException(status_code=400, detail="文件夹不支持匿名下载直链")
+
+    if not node.direct_download_token:
+        node.direct_download_token = secrets.token_urlsafe(32)
+        await db.flush()
+
+    return ok(
+        {
+            "url": f"/api/nodes/{node.id}/download?key={node.direct_download_token}",
+        }
+    ).model_dump()
 
 
 @router.get("/{node_id}/thumbnail")

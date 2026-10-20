@@ -1,5 +1,5 @@
 import { Box, Menu } from '@mantine/core'
-import { IconClipboardCheck, IconClipboardCopy, IconCopy, IconInfoCircle, IconLink, IconLogout, IconPencil, IconPlayerPlay, IconStar, IconStarFilled, IconTrash, IconUpload } from '@tabler/icons-react'
+import { IconClipboardCheck, IconClipboardCopy, IconCopy, IconDownload, IconInfoCircle, IconLink, IconLogout, IconPencil, IconPlayerPlay, IconStar, IconStarFilled, IconTrash } from '@tabler/icons-react'
 import type { DriveNode } from '../../types/node'
 import type { MediaPreviewKind } from '../../lib/mediaPreview'
 
@@ -15,7 +15,8 @@ export function DriveContextMenu({
   onOpenChange,
   onPreview,
   onDownload,
-  onCopyLink,
+  onQueueDownload,
+  onBatchDownload,
   onCopyName,
   onCopyNode,
   onPasteNode,
@@ -39,7 +40,8 @@ export function DriveContextMenu({
   onOpenChange: (opened: boolean) => void
   onPreview: (p: { node: DriveNode; kind: MediaPreviewKind }) => void
   onDownload: (node: DriveNode) => void
-  onCopyLink: (node: DriveNode) => void
+  onQueueDownload: (node?: DriveNode) => void
+  onBatchDownload: (node?: DriveNode) => void
   onCopyName: (node: DriveNode) => void
   onCopyNode: (node: DriveNode) => void
   onPasteNode: () => void
@@ -53,8 +55,8 @@ export function DriveContextMenu({
   onLeaveSharedFolder: (node: DriveNode) => void
 }) {
   const showSingleNodeItems = targetNode !== null && selectedCount === 1
-  const showBatchDelete = !showSingleNodeItems && selectedCount > 1
-  const effectiveOpened = opened && (showSingleNodeItems || showBatchDelete || (hasClipboard && !showSingleNodeItems && !showBatchDelete))
+  const showBatchItems = !showSingleNodeItems && selectedCount > 1
+  const effectiveOpened = opened && (showSingleNodeItems || showBatchItems || (hasClipboard && !showSingleNodeItems && !showBatchItems))
   const isShared = sharedRole !== null
   const canModify = !isShared || sharedRole === 'admin'
   const canShare = !isShared || sharedRole === 'admin'
@@ -91,14 +93,19 @@ export function DriveContextMenu({
               </Menu.Item>
             )}
             {!targetNode.is_folder && (
-              <Menu.Item leftSection={<IconUpload size={14} />} onClick={() => onDownload(targetNode)}>
+              <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onDownload(targetNode)}>
                 下载
               </Menu.Item>
             )}
-            {!targetNode.is_folder && canShare && (
-              <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onCopyLink(targetNode)}>
-                创建公开下载直链
-              </Menu.Item>
+            {targetNode.is_folder && (
+              <>
+                <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onQueueDownload(targetNode)}>
+                  逐个下载
+                </Menu.Item>
+                <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onBatchDownload(targetNode)}>
+                  打包为 ZIP
+                </Menu.Item>
+              </>
             )}
             <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onCopyName(targetNode)}>
               复制文件名
@@ -138,8 +145,14 @@ export function DriveContextMenu({
               </Menu.Item>
             )}
           </>
-        ) : showBatchDelete ? (
+        ) : showBatchItems ? (
           <>
+            <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onQueueDownload()}>
+              逐个下载已选（{selectedCount}）
+            </Menu.Item>
+            <Menu.Item leftSection={<IconDownload size={14} />} onClick={() => onBatchDownload()}>
+              打包下载已选（{selectedCount}）
+            </Menu.Item>
             <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={onBatchDelete}>
               删除已选（{selectedCount}）
             </Menu.Item>

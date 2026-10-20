@@ -1,5 +1,5 @@
 import { api, clearAccessToken, getAccessToken, unwrap } from './api'
-import type { AccessLogPage, AdminUser, BreadcrumbItem, Collaborator, DriveNode, FolderTreeItem, ShareLink, ShareLinkPublicInfo, ShareLinkWithNode, SharedFolder } from '../types/node'
+import type { AccessLogPage, AdminUser, BreadcrumbItem, Collaborator, DownloadManifestItem, DriveNode, FolderTreeItem, ShareLink, ShareLinkPublicInfo, ShareLinkWithNode, SharedFolder } from '../types/node'
 
 export async function fetchRootId(): Promise<string> {
   const res = await api.get('/nodes/root')
@@ -54,11 +54,24 @@ export function downloadUrl(nodeId: string): string {
   return `/api/nodes/${nodeId}/download`
 }
 
+export function batchDownloadUrl(nodeIds: string[]): string {
+  const params = new URLSearchParams()
+  for (const nodeId of nodeIds) params.append('ids', nodeId)
+  return `/api/nodes/batch-download?${params.toString()}`
+}
+
+export async function fetchDownloadManifest(nodeIds: string[]): Promise<DownloadManifestItem[]> {
+  const params = new URLSearchParams()
+  for (const nodeId of nodeIds) params.append('ids', nodeId)
+  const res = await api.get(`/nodes/download-manifest?${params.toString()}`)
+  return unwrap<DownloadManifestItem[]>(res.data)
+}
+
 export function thumbnailUrl(nodeId: string, size = 200): string {
   return `/api/nodes/${nodeId}/thumbnail?size=${size}`
 }
 
-/** 当前登录会话可直接打开的完整下载 URL。对外分享请使用 absoluteShareDownloadUrl。 */
+/** 当前登录会话可直接打开的完整下载 URL。 */
 export function absoluteDownloadUrl(nodeId: string): string {
   if (typeof window === 'undefined') {
     return downloadUrl(nodeId)
@@ -67,6 +80,14 @@ export function absoluteDownloadUrl(nodeId: string): string {
   const apiPath = downloadUrl(nodeId)
   const fullPath = `${basePath}${apiPath.startsWith('/') ? apiPath : `/${apiPath}`}`
   return new URL(fullPath, window.location.origin).toString()
+}
+
+/** 获取或创建无需登录的稳定下载直链。 */
+export async function ensureDirectDownloadUrl(nodeId: string): Promise<string> {
+  const res = await api.put(`/nodes/${nodeId}/direct-download`)
+  const relativeUrl = unwrap<{ url: string }>(res.data).url
+  if (typeof window === 'undefined') return relativeUrl
+  return new URL(relativeUrl, window.location.origin).toString()
 }
 
 export async function renameNode(nodeId: string, name: string): Promise<DriveNode> {
@@ -277,12 +298,6 @@ export function shareDownloadUrl(token: string, accessToken?: string): string {
 export function absoluteShareUrl(token: string): string {
   if (typeof window === 'undefined') return `/s/${token}`
   return `${window.location.origin}/s/${token}`
-}
-
-export function absoluteShareDownloadUrl(token: string): string {
-  const path = `/api/public/share/${token}/download`
-  if (typeof window === 'undefined') return path
-  return new URL(path, window.location.origin).toString()
 }
 
 export async function listAccessLogs(params?: {

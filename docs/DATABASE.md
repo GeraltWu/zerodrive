@@ -63,6 +63,7 @@ erDiagram
         string blob_id FK
         string mime_type
         json meta_json
+        string direct_download_token
         datetime updated_at
     }
 
@@ -131,6 +132,7 @@ erDiagram
 | `blob_id` | `VARCHAR(36)` | FK → `blobs.id`, **ON DELETE RESTRICT**, NULL 允许 | 文件内容引用；文件夹为 `NULL` |
 | `mime_type` | `VARCHAR(255)` | NULL | 上传时的 Content-Type |
 | `meta_json` | `JSON` | NULL | 媒体元数据（如 ffprobe 结果） |
+| `direct_download_token` | `VARCHAR(64)` | NULL | 匿名下载直链的随机密钥；为 `NULL` 时不开放匿名下载 |
 | `updated_at` | `DATETIME` (tz) | NOT NULL | 最后变更时间 |
 
 **固定主键（种子）：**
@@ -144,6 +146,7 @@ erDiagram
 - 删除节点：子树按 **后序** 删除；子节点先删，避免自引用 FK 顺序问题（`node_service.delete_cascade`）。
 - 重命名 / 移动：同父（或目标父）下 **名称唯一** 由应用层 `ConflictError` 保证，库无复合 UNIQUE。
 - 根节点不可重命名、移动、删除。
+- 匿名下载直链仅在 `direct_download_token` 匹配时跳过用户权限校验；该字段不通过 `NodeOut` 暴露。
 - **已移除列 `storage_key`**：旧版曾在此存本地相对路径；升级后由 `blobs.object_key` 承担（见第 4 节）。
 
 **与 API 的对应：** 对外 `NodeOut` 仅包含 `id, parent_id, name, is_folder, size, mime_type, meta_json, updated_at`，不含 `blob_id`。

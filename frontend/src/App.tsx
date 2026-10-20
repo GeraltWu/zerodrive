@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { ActionIcon, Box, Burger, Button, Drawer, Group, Modal, NavLink, Paper, Text, Title, useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import { ActionIcon, Box, Burger, Button, Drawer, Group, NavLink, Paper, Text, Title, useMantineColorScheme, useMantineTheme } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Group as PanelGroup, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
 import { IconArrowsMaximize, IconFiles, IconFolder, IconHistory, IconLink, IconMoon, IconShield, IconSun, IconX } from '@tabler/icons-react'
 import { AuthGuard } from './components/layout/AuthGuard'
 import { AppToolbar } from './components/layout/AppToolbar'
@@ -18,8 +17,11 @@ import { getMediaPreviewKind } from './lib/mediaPreview'
 
 import type { PreviewData } from './components/drive/PreviewPanel'
 import { PreviewPanel } from './components/drive/PreviewPanel'
+import { FloatingPreviewWindow } from './components/drive/FloatingPreviewWindow'
 import type { UploadItem } from './components/drive/DriveContentPane'
 import { FloatingUploadPanel } from './components/drive/FloatingUploadPanel'
+import { FloatingDownloadPanel } from './components/drive/FloatingDownloadPanel'
+import { useDownloadQueue } from './lib/useDownloadQueue'
 import type { DriveNode } from './types/node'
 import type { AppContext } from './appContext'
 
@@ -41,7 +43,14 @@ function AppLayout() {
   const [previewCollapsed, setPreviewCollapsed] = useState(false)
   const [mediaFiles, setMediaFiles] = useState<DriveNode[]>([])
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([])
-  const previewPanelRef = useRef<PanelImperativeHandle | null>(null)
+  const {
+    downloadItems,
+    startDownloadQueue,
+    cancelDownload,
+    retryDownload,
+    removeDownload,
+    clearFinishedDownloads,
+  } = useDownloadQueue()
   const onRemoveUploadItem = (id: string) => setUploadItems((prev) => prev.filter((x) => x.id !== id))
   const toggleSidebar = () => setSidebarOpen((v) => !v)
   const { pathname } = useLocation()
@@ -151,77 +160,65 @@ function AppLayout() {
       {/* Toolbar + content */}
       <Box style={{ flex: '1 1 0%', display: 'flex', minHeight: 0, position: 'relative' }}>
         {!isMobile && <AppToolbar isAdmin={isAdmin} />}
-        <PanelGroup orientation="horizontal" style={{ flex: 1, minWidth: 0 }}>
-          <Panel defaultSize={preview ? 60 : 100} minSize={35}>
-            <Box
-              style={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'auto',
-              }}
-            >
-              <Outlet context={{ isMobile, isAdmin, sidebarOpen, toggleSidebar, preview, setPreview, previewCollapsed, setPreviewCollapsed, mediaFiles, setMediaFiles, uploadItems, setUploadItems, onRemoveUploadItem } satisfies AppContext} />
-            </Box>
-          </Panel>
-          {preview && !isMobile && (
-            <>
-              <Separator
-                style={{
-                  width: previewCollapsed ? 0 : 6,
-                  background: 'var(--mantine-color-default-border)',
-                  overflow: 'hidden',
-                }}
-              />
-              <Panel
-                defaultSize={40}
-                minSize={20}
-                collapsible
-                collapsedSize={0}
-                panelRef={previewPanelRef}
-                style={previewCollapsed ? { overflow: 'hidden' } : undefined}
-              >
-                <PreviewPanel
-                  preview={preview}
-                  mediaFiles={mediaFiles}
-                  onCollapseToggle={() => { previewPanelRef.current?.collapse(); setPreviewCollapsed(true) }}
-                  onClose={() => setPreview(null)}
-                  onNavigate={(node) => {
-                    const k = getMediaPreviewKind(node.name)
-                    if (k) {
-                      setPreview({ node, kind: k })
-                      previewPanelRef.current?.expand()
-                      setPreviewCollapsed(false)
-                    }
-                  }}
-                />
-              </Panel>
-            </>
-          )}
-        </PanelGroup>
+        <Box
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'auto',
+          }}
+        >
+          <Outlet context={{ isMobile, isAdmin, sidebarOpen, toggleSidebar, preview, setPreview, previewCollapsed, setPreviewCollapsed, mediaFiles, setMediaFiles, uploadItems, setUploadItems, onRemoveUploadItem, startDownloadQueue } satisfies AppContext} />
+        </Box>
 
-        {preview && isMobile && (
-          <Modal
-            opened
-            onClose={() => setPreview(null)}
-            fullScreen
-            withCloseButton={false}
-            padding={0}
-          >
+        {preview && !isMobile && !previewCollapsed && (
+          <FloatingPreviewWindow>
             <PreviewPanel
+              key={preview.node.id}
               preview={preview}
               mediaFiles={mediaFiles}
-              onClose={() => setPreview(null)}
+              floating
+              onCollapseToggle={() => setPreviewCollapsed(true)}
+              onClose={() => { setPreview(null); setPreviewCollapsed(false) }}
               onNavigate={(node) => {
                 const kind = getMediaPreviewKind(node.name)
                 if (kind) setPreview({ node, kind })
               }}
             />
-          </Modal>
+          </FloatingPreviewWindow>
+        )}
+
+        {preview && isMobile && !previewCollapsed && (
+          <Box
+            style={{
+              position: 'fixed',
+              left: 8,
+              right: 8,
+              bottom: 8,
+              height: 'min(62vh, 580px)',
+              minHeight: 320,
+              zIndex: 350,
+            }}
+          >
+            <PreviewPanel
+              key={preview.node.id}
+              preview={preview}
+              mediaFiles={mediaFiles}
+              mobile
+              onCollapseToggle={() => setPreviewCollapsed(true)}
+              onClose={() => { setPreview(null); setPreviewCollapsed(false) }}
+              onNavigate={(node) => {
+                const kind = getMediaPreviewKind(node.name)
+                if (kind) setPreview({ node, kind })
+              }}
+            />
+          </Box>
         )}
 
         {/* Bottom-right floating cards (stacked) */}
-        {(uploadItems.length > 0 || (preview && !isMobile && previewCollapsed)) && (
+        {(uploadItems.length > 0 || downloadItems.length > 0 || (preview && previewCollapsed)) && (
           <Box
             style={{
               position: 'fixed',
@@ -236,7 +233,16 @@ function AppLayout() {
             {uploadItems.length > 0 && (
               <FloatingUploadPanel items={uploadItems} onRemove={onRemoveUploadItem} />
             )}
-            {preview && !isMobile && previewCollapsed && (
+            {downloadItems.length > 0 && (
+              <FloatingDownloadPanel
+                items={downloadItems}
+                onCancel={cancelDownload}
+                onRetry={retryDownload}
+                onRemove={removeDownload}
+                onClearFinished={clearFinishedDownloads}
+              />
+            )}
+            {preview && previewCollapsed && (
               <Paper
                 shadow="md"
                 radius="md"
@@ -254,7 +260,7 @@ function AppLayout() {
                   size="sm"
                   variant="subtle"
                   color="gray"
-                  onClick={() => { previewPanelRef.current?.expand(); setPreviewCollapsed(false) }}
+                  onClick={() => setPreviewCollapsed(false)}
                 >
                   <IconArrowsMaximize size={16} />
                 </ActionIcon>
@@ -263,7 +269,7 @@ function AppLayout() {
                   size="sm"
                   variant="subtle"
                   color="gray"
-                  onClick={() => setPreview(null)}
+                  onClick={() => { setPreview(null); setPreviewCollapsed(false) }}
                 >
                   <IconX size={14} />
                 </ActionIcon>

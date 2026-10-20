@@ -48,6 +48,7 @@ async def _add_node_columns() -> None:
         adds = [
             ("mime_type", "VARCHAR(255)"),
             ("meta_json", "JSON"),
+            ("direct_download_token", "VARCHAR(64)"),
             ("owner_id", "VARCHAR(36) REFERENCES users(id)"),
         ]
         for col, dtype in adds:

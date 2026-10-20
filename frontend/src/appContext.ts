@@ -18,6 +18,7 @@ export type AppContext = {
   uploadItems: UploadItem[]
   setUploadItems: (items: UploadItem[] | ((previous: UploadItem[]) => UploadItem[])) => void
   onRemoveUploadItem: (id: string) => void
+  startDownloadQueue: (nodeIds: string[]) => Promise<void>
 }
 
 export function useAppContext() {

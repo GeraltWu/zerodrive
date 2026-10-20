@@ -51,6 +51,14 @@ async def lifespan(app: FastAPI):
                 )
             except Exception:
                 pass
+        try:
+            await conn.run_sync(
+                lambda sync_conn: sync_conn.exec_driver_sql(
+                    "ALTER TABLE nodes ADD COLUMN direct_download_token VARCHAR(64)"
+                )
+            )
+        except Exception:
+            pass
     yield
     await engine.dispose()
 

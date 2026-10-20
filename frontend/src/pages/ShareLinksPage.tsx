@@ -10,7 +10,7 @@ import {
   Title,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCheck, IconCopy, IconDownload, IconHistory, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconHistory, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import * as driveApi from '../lib/driveApi'
 import type { ShareLinkWithNode } from '../types/node'
@@ -104,27 +104,18 @@ export function ShareLinksPage() {
                     <Text size="sm">/s/{link.token}</Text>
                     <CopyButton value={driveApi.absoluteShareUrl(link.token)}>
                       {({ copied, copy }) => (
-                        <ActionIcon size="sm" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={copy}>
+                        <ActionIcon
+                          size="sm"
+                          variant="subtle"
+                          color={copied ? 'teal' : 'gray'}
+                          onClick={copy}
+                          aria-label="复制分享页链接"
+                          title="复制分享页链接"
+                        >
                           {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
                         </ActionIcon>
                       )}
                     </CopyButton>
-                    {!link.is_folder && !link.has_password && (
-                      <CopyButton value={driveApi.absoluteShareDownloadUrl(link.token)}>
-                        {({ copied, copy }) => (
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            color={copied ? 'teal' : 'blue'}
-                            onClick={copy}
-                            title="复制一点即下载的公开直链"
-                            aria-label="复制公开下载直链"
-                          >
-                            {copied ? <IconCheck size={14} /> : <IconDownload size={14} />}
-                          </ActionIcon>
-                        )}
-                      </CopyButton>
-                    )}
                   </Group>
                 </Table.Td>
                 <Table.Td>{link.has_password ? '是' : '否'}</Table.Td>
@@ -147,13 +138,28 @@ export function ShareLinksPage() {
                       color="gray"
                       onClick={() => navigate(`/access-logs?share_token=${encodeURIComponent(link.token)}`)}
                       title="访问记录"
+                      aria-label="查看访问记录"
                     >
                       <IconHistory size={18} />
                     </ActionIcon>
-                    <ActionIcon size="sm" variant="subtle" color={link.is_active ? 'yellow' : 'teal'} onClick={() => handleToggle(link.id)}>
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color={link.is_active ? 'yellow' : 'teal'}
+                      onClick={() => handleToggle(link.id)}
+                      title={link.is_active ? '停用分享链接' : '启用分享链接'}
+                      aria-label={link.is_active ? '停用分享链接' : '启用分享链接'}
+                    >
                       {link.is_active ? <IconPlayerPause size={18} /> : <IconPlayerPlay size={18} />}
                     </ActionIcon>
-                    <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleRevoke(link.id)}>
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="red"
+                      onClick={() => handleRevoke(link.id)}
+                      title="撤销分享链接"
+                      aria-label="撤销分享链接"
+                    >
                       <IconTrash size={18} />
                     </ActionIcon>
                   </Group>

@@ -13,7 +13,7 @@ import {
   Text,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCheck, IconCopy, IconDownload, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
 import * as driveApi from '../../lib/driveApi'
 import type { ShareLink } from '../../types/node'
 
@@ -164,27 +164,13 @@ export function ShareLinkDialog({
                               variant="subtle"
                               color={copied ? 'teal' : 'gray'}
                               onClick={copy}
+                              aria-label="复制分享页链接"
+                              title="复制分享页链接"
                             >
                               {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
                             </ActionIcon>
                           )}
                         </CopyButton>
-                        {!link.has_password && (
-                          <CopyButton value={driveApi.absoluteShareDownloadUrl(link.token)}>
-                            {({ copied, copy }) => (
-                              <ActionIcon
-                                size="xs"
-                                variant="subtle"
-                                color={copied ? 'teal' : 'blue'}
-                                onClick={copy}
-                                aria-label="复制公开下载直链"
-                                title="复制一点即下载的公开直链"
-                              >
-                                {copied ? <IconCheck size={12} /> : <IconDownload size={12} />}
-                              </ActionIcon>
-                            )}
-                          </CopyButton>
-                        )}
                       </Group>
                     </Table.Td>
                     <Table.Td>{link.has_password ? '是' : '否'}</Table.Td>
@@ -202,6 +188,8 @@ export function ShareLinkDialog({
                           variant="subtle"
                           color={link.is_active ? 'yellow' : 'teal'}
                           onClick={() => handleToggle(link.id)}
+                          aria-label={link.is_active ? '停用分享链接' : '启用分享链接'}
+                          title={link.is_active ? '停用分享链接' : '启用分享链接'}
                         >
                           {link.is_active ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
                         </ActionIcon>
@@ -210,6 +198,8 @@ export function ShareLinkDialog({
                           variant="subtle"
                           color="red"
                           onClick={() => handleRevoke(link.id)}
+                          aria-label="撤销分享链接"
+                          title="撤销分享链接"
                         >
                           <IconTrash size={14} />
                         </ActionIcon>
