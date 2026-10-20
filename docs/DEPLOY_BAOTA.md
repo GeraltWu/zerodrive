@@ -19,7 +19,7 @@ ZeroDrive backend 容器（FastAPI、SQLite、文件存储）
 
 ## 1. 准备服务器
 
-1. 将域名（例如 `drive.example.com`）解析到服务器公网 IP。
+1. 将域名 `zerodrive.wuziran.fun` 解析到服务器公网 IP。
 2. 在宝塔软件商店安装 Nginx 和 Docker；确认终端执行 `docker compose version` 有输出。
 3. 为文件和 Docker 数据预留足够磁盘空间。数据库与上传文件分别保存在 `/www/zerodrive-data/database` 和 `/www/zerodrive-data/files`。
 
@@ -48,8 +48,8 @@ BOT_DOWNLOAD_EXPIRE_SECONDS=300
 PORT=8600
 HOST_FILES_DIR=/www/zerodrive-data/files
 HOST_DATABASE_DIR=/www/zerodrive-data/database
-CORS_ORIGINS=https://drive.example.com
-PUBLIC_BASE_URL=https://drive.example.com
+CORS_ORIGINS=https://zerodrive.wuziran.fun
+PUBLIC_BASE_URL=https://zerodrive.wuziran.fun
 ```
 
 `PUBLIC_BASE_URL` 不要以 `/` 结尾。它决定 QQ Bot 收到的签名下载链接域名。`ADMIN_PASSWORD` 只在首次创建管理员时使用，数据库建立后修改 `.env` 不会重置已有管理员密码。
@@ -69,9 +69,30 @@ curl http://127.0.0.1:8600/api/health
 
 健康检查应返回 `status: ok`。后端每次启动会先执行数据库迁移；首次构建需要从网络下载 Docker 基础镜像和依赖。
 
+### 使用宝塔 Docker GUI 创建 Compose 项目
+
+部分宝塔版本的“创建编排”只提供项目名称和 Compose 内容，不提供工作目录。此时使用项目根目录中的 `docker-compose.baota.yml`，它已经把构建目录、`.env` 和数据挂载全部写成服务器绝对路径。
+
+1. 确认代码位于 `/www/wwwroot/zerodrive`，根目录存在 `.env`。
+2. 确认 `/www/zerodrive-data/files` 与 `/www/zerodrive-data/database` 已创建。
+3. 打开“Docker → 容器编排（Compose）→ 创建编排”。
+4. 项目名称填写 `zerodrive`。
+5. 将 `/www/wwwroot/zerodrive/docker-compose.baota.yml` 的全部内容粘贴到 Compose 编辑框，然后创建并启动。
+
+如果你的宝塔版本支持从文件导入，则直接选择 `docker-compose.baota.yml`。不要在没有工作目录的界面中粘贴普通 `docker-compose.yml`，因为其中的相对路径会以宝塔保存编排的目录为基准。
+
+创建并启动后，容器列表应出现：
+
+```text
+zerodrive-backend
+zerodrive-frontend
+```
+
+在 GUI 中可以完成启动、停止、重启、查看日志和资源占用。代码更新后需要选择“重新构建 / 重建 Compose 项目”；普通“重启”只会重启旧镜像，不会把新代码构建进去。若当前宝塔版本没有重建按钮，再在项目目录执行 `docker compose up -d --build`。
+
 ## 4. 在宝塔创建站点和反向代理
 
-1. 在“网站”中新建 `drive.example.com`，选择纯静态站点即可。
+1. 在“网站”中新建 `zerodrive.wuziran.fun`，选择纯静态站点即可。
 2. 打开站点设置 → 反向代理 → 添加反向代理。
 3. 代理名称可填 `zerodrive`，目标 URL 填 `http://127.0.0.1:8600`，发送域名使用 `$host`，关闭代理缓存。
 4. 在站点 Nginx 配置的 `server { ... }` 内加入：
@@ -100,8 +121,8 @@ proxy_set_header X-Forwarded-Proto $scheme;
 使用下列地址验收：
 
 ```text
-https://drive.example.com/
-https://drive.example.com/api/health
+https://zerodrive.wuziran.fun/
+https://zerodrive.wuziran.fun/api/health
 ```
 
 首次登录账号为 `admin`，密码为首次启动时 `.env` 中的 `ADMIN_PASSWORD`。
@@ -110,25 +131,37 @@ https://drive.example.com/api/health
 
 QQ Bot 的基本调用顺序：
 
-1. `POST https://drive.example.com/api/auth/login`，提交网盘账号和密码，读取响应里的 `data.access_token`。
+1. `POST https://zerodrive.wuziran.fun/api/auth/login`，提交网盘账号和密码，读取响应里的 `data.access_token`。
 2. 调用 `/api/bot/resolve-path` 或 `/api/bot/random-file` 时携带 `Authorization: Bearer <access_token>`。
 3. `/api/bot/random-file` 返回的 `data.download_url` 已包含签名和过期时间。QQ 客户端或下载器可直接访问该地址，无需再携带 JWT。
 4. 下载地址默认 300 秒失效，可通过 `BOT_DOWNLOAD_EXPIRE_SECONDS` 调整。它适合临时发送；需要长期链接时，在网页中创建公开分享链接。
 
 ## 7. 更新
 
-更新前先备份数据，然后执行：
+更新包含两个动作：先把新源码同步到服务器，再重新构建 Compose 项目。推荐通过 Git 管理源码：
 
 ```bash
 cd /www/wwwroot/zerodrive
 git pull
-docker compose up -d --build
+docker compose up -d --build --remove-orphans
 docker compose ps
 docker compose logs --tail=100 backend
-curl https://drive.example.com/api/health
+curl https://zerodrive.wuziran.fun/api/health
 ```
 
-构建成功后 Compose 会替换应用容器，并分别挂载 `HOST_FILES_DIR` 与 `HOST_DATABASE_DIR`。容器内固定使用 `/app/data/files` 和 `/app/data/database`。
+如果不使用 Git，可在宝塔文件管理器中覆盖上传 `backend/`、`frontend/`、`docker-compose.yml` 等源码，但保留服务器现有的 `.env`。然后进入“Docker → 容器编排 → zerodrive”，选择“重新构建 / 重建项目”。普通“重启”不会重新构建镜像，仍然运行旧代码。
+
+只修改一个服务时可以单独重建：
+
+```bash
+# 只更新前端
+docker compose up -d --build frontend
+
+# 只更新后端
+docker compose up -d --build backend
+```
+
+构建成功后 Compose 会替换应用容器，并继续挂载 `HOST_FILES_DIR` 与 `HOST_DATABASE_DIR`。上传文件和 SQLite 数据库不在镜像内，因此重建不会清空数据。后端新容器启动时会自动执行数据库迁移，更新后应检查后端日志和健康检查。
 
 ## 8. 备份
 
@@ -194,7 +227,7 @@ docker compose ps
 docker compose logs -f --tail=200 backend
 docker compose logs -f --tail=200 frontend
 curl -i http://127.0.0.1:8600/api/health
-curl -i https://drive.example.com/api/health
+curl -i https://zerodrive.wuziran.fun/api/health
 ```
 
 - 公网返回 502：检查两个容器状态，并从服务器本机访问 `127.0.0.1:8600`。

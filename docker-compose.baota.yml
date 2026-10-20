@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: /www/wwwroot/zerodrive/backend
+      dockerfile: Dockerfile
+    container_name: zerodrive-backend
+    env_file:
+      - /www/wwwroot/zerodrive/.env
+    environment:
+      FILES_DIR: /app/data/files
+      DATABASE_DIR: /app/data/database
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: "525600"
+    volumes:
+      - /www/zerodrive-data/files:/app/data/files
+      - /www/zerodrive-data/database:/app/data/database
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: /www/wwwroot/zerodrive/frontend
+      dockerfile: Dockerfile
+    container_name: zerodrive-frontend
+    ports:
+      - "127.0.0.1:8600:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
