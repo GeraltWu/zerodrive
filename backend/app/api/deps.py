@@ -1,20 +1,24 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.user import User
 
 
 async def get_current_user(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="未登录")
-    token = authorization.split(" ", 1)[1].strip()
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get(get_settings().session_cookie_name, "").strip()
     if not token:
         raise HTTPException(status_code=401, detail="未登录")
     sub = decode_access_token(token)
@@ -37,12 +41,15 @@ async def get_current_admin(
 
 
 async def get_current_user_optional(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     db: AsyncSession = Depends(get_db),
 ) -> User | None:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        return None
-    token = authorization.split(" ", 1)[1].strip()
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        token = request.cookies.get(get_settings().session_cookie_name, "").strip()
     if not token:
         return None
     sub = decode_access_token(token)

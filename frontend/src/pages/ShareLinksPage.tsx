@@ -10,7 +10,7 @@ import {
   Title,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCheck, IconCopy, IconHistory, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconDownload, IconHistory, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import * as driveApi from '../lib/driveApi'
 import type { ShareLinkWithNode } from '../types/node'
@@ -109,6 +109,22 @@ export function ShareLinksPage() {
                         </ActionIcon>
                       )}
                     </CopyButton>
+                    {!link.is_folder && !link.has_password && (
+                      <CopyButton value={driveApi.absoluteShareDownloadUrl(link.token)}>
+                        {({ copied, copy }) => (
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color={copied ? 'teal' : 'blue'}
+                            onClick={copy}
+                            title="复制一点即下载的公开直链"
+                            aria-label="复制公开下载直链"
+                          >
+                            {copied ? <IconCheck size={14} /> : <IconDownload size={14} />}
+                          </ActionIcon>
+                        )}
+                      </CopyButton>
+                    )}
                   </Group>
                 </Table.Td>
                 <Table.Td>{link.has_password ? '是' : '否'}</Table.Td>

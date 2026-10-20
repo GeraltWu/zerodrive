@@ -167,9 +167,9 @@ async def public_thumbnail(
     from starlette.responses import Response
 
     from app.core.config import get_settings
-    from app.models.blob import Blob
+    from app.models.storage import Blob
     from app.models.storage import StorageBackend
-    from app.services.storage import get_driver
+    from app.services.storage_drivers import get_driver
     from app.services.thumbnail import thumbnail_from_bytes, thumbnail_from_path
 
     size = max(40, min(800, size))
@@ -208,7 +208,7 @@ async def public_thumbnail(
                     driver.get_object_stream, blob.bucket, blob.object_key, None
                 )
                 try:
-                    data = body_stream.read()
+                    data = await asyncio.to_thread(body_stream.read)
                 finally:
                     close_fn = getattr(body_stream, "close", None)
                     if callable(close_fn):

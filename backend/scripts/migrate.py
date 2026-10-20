@@ -29,12 +29,13 @@ from app.models.user import User
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.services.node_service import create_user_root
-from app.services.storage import ensure_data_root
+from app.services.storage import ensure_files_dir
 from app.services.storage_bootstrap import (
     drop_nodes_storage_key_column,
     ensure_node_blob_id_column,
     ensure_storage_backend_columns,
     migrate_legacy_storage_keys_to_blobs,
+    reconcile_blob_references,
     seed_storage_backends_if_empty,
 )
 
@@ -57,8 +58,8 @@ async def _add_node_columns() -> None:
 
 async def migrate() -> None:
     settings = get_settings()
-    ensure_data_root()
-    os.makedirs(os.path.dirname(settings.sqlite_path), exist_ok=True)
+    ensure_files_dir()
+    os.makedirs(os.path.dirname(settings.database_path), exist_ok=True)
 
     # 1. 建表
     async with engine.begin() as conn:
@@ -75,6 +76,7 @@ async def migrate() -> None:
     async with AsyncSessionLocal() as session:
         await seed_storage_backends_if_empty(session, settings)
         await migrate_legacy_storage_keys_to_blobs(session)
+        await reconcile_blob_references(session)
     await drop_nodes_storage_key_column(engine)
     print("3. 存储迁移完成")
 
@@ -89,10 +91,15 @@ async def migrate() -> None:
             admin = User(
                 username=settings.admin_username,
                 password_hash=hash_password(settings.admin_password),
+                is_admin=True,
             )
             session.add(admin)
             await session.commit()
             print(f"  + 已创建管理员 {settings.admin_username}")
+        elif not admin.is_admin:
+            admin.is_admin = True
+            await session.flush()
+            print(f"  + 已恢复管理员权限 {settings.admin_username}")
 
         # 迁移旧共享根 → 个人根
         old_root = await session.get(Node, ROOT_FOLDER_ID)

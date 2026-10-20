@@ -7,7 +7,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-DATABASE_URL = f"sqlite+aiosqlite:///{settings.sqlite_path}"
+DATABASE_URL = f"sqlite+aiosqlite:///{settings.database_path}"
 
 engine = create_async_engine(
     DATABASE_URL,

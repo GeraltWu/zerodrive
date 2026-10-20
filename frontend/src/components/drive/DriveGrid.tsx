@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Box, Image, Paper, SimpleGrid, Text } from '@mantine/core'
+import { ActionIcon, Box, Image, Paper, SimpleGrid, Text } from '@mantine/core'
+import { IconDots } from '@tabler/icons-react'
 import type { DriveNode } from '../../types/node'
-import { FileTypeIcon, IMAGE } from '../../lib/fileTypeIcon'
+import { FileTypeIcon } from '../../lib/fileTypeIcon'
+import { IMAGE_EXTENSIONS } from '../../lib/fileTypes'
 import * as driveApi from '../../lib/driveApi'
 
 function isImageFilename(name: string): boolean {
   const i = name.lastIndexOf('.')
   if (i <= 0 || i >= name.length - 1) return false
-  return IMAGE.has(name.slice(i + 1).toLowerCase())
+  return IMAGE_EXTENSIONS.has(name.slice(i + 1).toLowerCase())
 }
 
 type GridSize = 'small' | 'large'
@@ -47,6 +49,7 @@ interface DriveGridProps {
   onRowClick: (e: React.MouseEvent, node: DriveNode) => void
   onRowContextMenu: (e: React.MouseEvent, node: DriveNode) => void
   onRowDoubleClick: (e: React.MouseEvent, node: DriveNode) => void
+  mobile: boolean
 }
 
 export function DriveGrid({
@@ -56,6 +59,7 @@ export function DriveGrid({
   onRowClick,
   onRowContextMenu,
   onRowDoubleClick,
+  mobile,
 }: DriveGridProps) {
   const { cols } = gridLayout[size]
 
@@ -68,14 +72,30 @@ export function DriveGrid({
           p={size === 'small' ? 6 : 'xs'}
           style={{
             cursor: 'pointer',
+            position: 'relative',
             backgroundColor: selectedIds.has(node.id)
               ? 'var(--mantine-color-blue-0)'
               : undefined,
           }}
-          onClick={(e) => onRowClick(e, node)}
-          onDoubleClick={(e) => onRowDoubleClick(e, node)}
+          onClick={(e) => mobile ? onRowDoubleClick(e, node) : onRowClick(e, node)}
+          onDoubleClick={mobile ? undefined : (e) => onRowDoubleClick(e, node)}
           onContextMenu={(e) => onRowContextMenu(e, node)}
         >
+          {mobile && (
+            <ActionIcon
+              size="sm"
+              variant="filled"
+              color="gray"
+              aria-label={`更多操作：${node.name}`}
+              style={{ position: 'absolute', top: 4, right: 4, zIndex: 1, opacity: 0.85 }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRowContextMenu(e, node)
+              }}
+            >
+              <IconDots size={16} />
+            </ActionIcon>
+          )}
           <Box
             style={{
               aspectRatio: '1',

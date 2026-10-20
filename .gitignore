@@ -1,6 +1,8 @@
 /backend/data/files
+/data/
 /backend/.env
 backend/**/__pycache__/
+/backend/.test-data/
 
 *.db
 *.sqlite
@@ -14,4 +16,5 @@ backend/data/*.db
 .DS_Store
 .claude/
 .vscode/
+/.env
 

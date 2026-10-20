@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ActionIcon, Box, Group, UnstyledButton } from '@mantine/core'
 import { IconChevronRight, IconFolder } from '@tabler/icons-react'
 import { useDroppable } from '@dnd-kit/core'
@@ -57,11 +57,8 @@ function TreeBranch({
 }) {
   const hasChildren = node.children.length > 0
   const containsSel = subtreeContains(node, selectedId)
-  const [opened, setOpened] = useState(() => containsSel)
-
-  useEffect(() => {
-    if (containsSel) setOpened(true)
-  }, [containsSel])
+  const [manuallyOpened, setManuallyOpened] = useState(() => containsSel)
+  const opened = containsSel || manuallyOpened
 
   const label =
     node.id === rootId ? '全部文件' : node.name || '文件夹'
@@ -93,7 +90,7 @@ function TreeBranch({
             aria-label={opened ? '折叠' : '展开'}
             onClick={(e) => {
               e.stopPropagation()
-              setOpened((o) => !o)
+              setManuallyOpened((o) => !o)
             }}
           >
             <IconChevronRight

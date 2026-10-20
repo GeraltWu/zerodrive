@@ -5,18 +5,20 @@ services:
       dockerfile: Dockerfile
     container_name: zerodrive-backend
     environment:
-      - DATA_ROOT=/app/data/files
-      - SQLITE_PATH=/app/data/zerodrive.db
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-123}
-      - JWT_SECRET=${JWT_SECRET:-change-me-to-a-long-random-secret}
+      - FILES_DIR=/app/data/files
+      - DATABASE_DIR=/app/data/database
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?请在根目录 .env 中设置 ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET:?请在根目录 .env 中设置 JWT_SECRET}
       - JWT_ALGORITHM=HS256
-      - JWT_EXPIRE_MINUTES=525,600
+      - JWT_EXPIRE_MINUTES=525600
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost}
-      - BOT_API_TOKEN=${BOT_API_TOKEN:-qqbotdesu}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - BOT_DOWNLOAD_EXPIRE_SECONDS=${BOT_DOWNLOAD_EXPIRE_SECONDS:-300}
     volumes:
-      - zerodrive-data:/app/data
+      - "${HOST_FILES_DIR:-./data/files}:/app/data/files"
+      - "${HOST_DATABASE_DIR:-./data/database}:/app/data/database"
     restart: unless-stopped
 
   frontend:
@@ -25,11 +27,7 @@ services:
       dockerfile: Dockerfile
     container_name: zerodrive-frontend
     ports:
-      - "${PORT:-8600}:80"
+      - "127.0.0.1:${PORT:-8600}:80"
     depends_on:
       - backend
     restart: unless-stopped
-
-volumes:
-  zerodrive-data:
-    driver: local

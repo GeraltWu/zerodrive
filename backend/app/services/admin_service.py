@@ -8,6 +8,7 @@ from app.models.access_log import AccessLog
 from app.models.node import Node
 from app.models.user import User
 from app.schemas.admin import AdminUserOut
+from app.services import node_service
 
 
 async def list_users(session: AsyncSession) -> list[AdminUserOut]:
@@ -79,7 +80,7 @@ async def update_user(
     )
 
 
-async def delete_user(session: AsyncSession, target_id: str) -> None:
+async def delete_user(session: AsyncSession, target_id: str) -> list[tuple[str, str, str]]:
     target = await session.get(User, target_id)
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -95,5 +96,49 @@ async def delete_user(session: AsyncSession, target_id: str) -> None:
             raise HTTPException(
                 status_code=400, detail="不能删除最后一名活跃管理员"
             )
+    roots = list(
+        (
+            await session.execute(
+                select(Node).where(
+                    Node.owner_id == target_id,
+                    Node.parent_id.is_(None),
+                )
+            )
+        ).scalars().all()
+    )
+    purged: list[tuple[str, str, str]] = []
+    for root in roots:
+        purged.extend(
+            await node_service.delete_cascade(
+                session,
+                root.id,
+                target_id,
+                allow_root=True,
+            )
+        )
+
+    # 用户可能曾向他人的协作文件夹上传内容。这些节点不在其个人根目录下，
+    # 删除账号时转交给最近的外部祖先所有者，避免 RESTRICT 失败或误删他人目录。
+    remaining_nodes = list(
+        (
+            await session.execute(select(Node).where(Node.owner_id == target_id))
+        ).scalars().all()
+    )
+    for node in remaining_nodes:
+        parent_id = node.parent_id
+        inherited_owner_id: str | None = None
+        while parent_id:
+            parent = await session.get(Node, parent_id)
+            if not parent:
+                break
+            if parent.owner_id and parent.owner_id != target_id:
+                inherited_owner_id = parent.owner_id
+                break
+            parent_id = parent.parent_id
+        if not inherited_owner_id:
+            raise HTTPException(status_code=409, detail="用户仍有无法转交的文件节点")
+        node.owner_id = inherited_owner_id
+
     await session.delete(target)
     await session.flush()
+    return purged

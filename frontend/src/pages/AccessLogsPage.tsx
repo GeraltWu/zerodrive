@@ -84,7 +84,10 @@ export function AccessLogsPage() {
       .finally(() => setLoading(false))
   }, [shareToken, action, page, sort])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const frame = requestAnimationFrame(load)
+    return () => cancelAnimationFrame(frame)
+  }, [load])
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams)

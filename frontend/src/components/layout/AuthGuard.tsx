@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Center, Loader } from '@mantine/core'
 import { useNavigate } from 'react-router-dom'
 import * as driveApi from '../../lib/driveApi'
-import { getAccessToken } from '../../lib/api'
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
@@ -10,11 +9,6 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    if (!getAccessToken()) {
-      setOk(false)
-      navigate('/login', { replace: true })
-      return
-    }
     ;(async () => {
       try {
         await driveApi.me()

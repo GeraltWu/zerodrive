@@ -9,6 +9,7 @@ export interface ApiResponse<T> {
 
 export const api = axios.create({
   baseURL: '/api',
+  withCredentials: true,
 })
 
 const TOKEN_KEY = 'zd_access_token'

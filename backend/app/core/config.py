@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,8 +8,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    data_root: str = "./data/files"
-    sqlite_path: str = "./data/zerodrive.db"
+    files_dir: str = "./data/files"
+    database_dir: str = "./data/database"
+
+    @property
+    def database_path(self) -> str:
+        """SQLite 文件名固定，存放目录由 DATABASE_DIR 配置。"""
+        return str(Path(self.database_dir) / "zerodrive.db")
 
     # 仅当 storage_backends 为空时用于种子一行默认后端；连接与密钥以数据库为准（见 README）
     storage_driver: Literal["local", "s3"] = "local"
@@ -25,10 +31,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
-    cors_origins: str = "http://localhost:5173"
+    session_cookie_name: str = "zd_session"
+    session_cookie_secure: bool = False
+    """HTTPS 部署时设为 True；本地 HTTP 开发保持 False。"""
 
-    bot_api_token: str | None = None
-    """QQ 机器人等集成用只读 Token；请求头 Authorization: Bearer <token>。"""
+    cors_origins: str = "http://localhost:5173"
+    public_base_url: str | None = None
+    """对外可访问的站点根地址，用于生成 Bot 签名下载链接。"""
+
     bot_download_expire_seconds: int = 300
     """random-image 返回的 download_url 签名有效期（秒）。"""
 

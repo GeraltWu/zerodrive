@@ -12,7 +12,7 @@ import {
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
 import { IconShield, IconShieldOff, IconTrash, IconUserOff, IconUserCheck } from '@tabler/icons-react'
-import { useAppContext } from '../App'
+import { useAppContext } from '../appContext'
 import * as driveApi from '../lib/driveApi'
 import type { AdminUser } from '../types/node'
 
@@ -49,13 +49,15 @@ export function AdminUsersPage() {
   const { isAdmin } = useAppContext()
   const [users, setUsers] = useState<AdminUser[]>([])
 
-  if (!isAdmin) return <Navigate to="/" replace />
-
   const load = useCallback(() => {
     driveApi.listAdminUsers().then(setUsers).catch(() => {})
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (isAdmin) load()
+  }, [isAdmin, load])
+
+  if (!isAdmin) return <Navigate to="/" replace />
 
   const handleToggleAdmin = async (u: AdminUser) => {
     try {

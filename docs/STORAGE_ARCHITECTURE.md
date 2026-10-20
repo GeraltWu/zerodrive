@@ -7,7 +7,7 @@
 已实现第一期能力（以代码为准）：
 
 - 表 `storage_backends`、`blobs`；`nodes.blob_id`；**不再使用 `nodes.storage_key`**。旧库启动时一次性：将仍存在的 `storage_key` 迁入 `blobs` 并 `UPDATE nodes.blob_id`，随后 **`ALTER TABLE nodes DROP COLUMN storage_key`**（需 SQLite 3.35+）。
-- 驱动：`local`（`DATA_ROOT`）、`generic_s3` / `minio` / `aws` / `aliyun`（boto3 S3 兼容 API）。**S3 连接参数与静态密钥以 `storage_backends` 表为准**；密钥列为空时使用环境变量 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`（如实例角色场景）。空库种子时可将 `.env` 中 `S3_*` 写入表，见 `backend/README.md`。
+- 驱动：`local`（`FILES_DIR`）、`generic_s3` / `minio` / `aws` / `aliyun`（boto3 S3 兼容 API）。**S3 连接参数与静态密钥以 `storage_backends` 表为准**；密钥列为空时使用环境变量 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`（如实例角色场景）。空库种子时可将 `.env` 中 `S3_*` 写入表，见 `backend/README.md`。
 - 上传经默认 `storage_backend` 写入；下载本地仍用 `FileResponse`（含 Range），S3 用流式 `StreamingResponse` 并转发 `Range`。
 - 删除子树时维护 `blobs.refcount`，为 0 时删对象。
 - 未实现：`multipart_uploads` 表与分片 API、预签名直链、异步 GC 队列（当前在请求路径内 `purge`）。
@@ -198,7 +198,7 @@
 | 4 | **网络**：确保 A 能访问对象存储 **API 端口**（HTTPS，内网 DNS 优先）；防火墙 **仅放行** A（及运维堡垒机）访问存储管理面（按需）。 |
 | 5 | 若使用 **预签名直链**：前端浏览器域名需在对象存储桶 **CORS** 中允许；API 负责签发并控制 TTL。 |
 | 6 | 部署 **异步 worker**（GC、分片清理、迁移任务）可同机或独立小实例，需同库与同存储网络可达。 |
-| 7 | **停用本地大文件目录**：新上传不再写 `data_root` 下 blob；旧数据按第 9 节迁移后下线本地盘或只读保留。 |
+| 7 | **停用本地大文件目录**：新上传不再写 `FILES_DIR` 下 blob；旧数据按第 9 节迁移后下线本地盘或只读保留。 |
 
 ### 8.2 服务器 B：自建 MinIO（或多节点集群）
 
@@ -234,7 +234,7 @@
 
 1. **B**：桶与权限就绪（见 8.2 / 8.3）。  
 2. **A**：插入 `storage_backends` 默认记录；部署支持 Driver 的应用版本。  
-3. **迁移脚本**（在可访问旧 `data_root` 的机器上运行，通常为 A 或挂载旧盘的迁移机）：  
+3. **迁移脚本**（在可访问旧 `FILES_DIR` 的机器上运行，通常为 A 或挂载旧盘的迁移机）：
    - 遍历现有带 `storage_key` 的节点；对每个文件 `PutObject` 到目标桶，`object_key` 可与现 `storage_key` 相同以便映射；  
    - 创建对应 `blobs` 行并更新 `nodes.blob_id`，最后切换读写到新路径。  
 4. **校验**：抽样比对 `size` 与远端 `HeadObject`；必要时比对 ETag。  
@@ -245,7 +245,7 @@
 
 ## 10. 与现有代码的对应关系（实现时）
 
-- `backend/app/services/storage.py`：本地 Driver 使用的 `data_root` 路径工具。  
+- `backend/app/services/storage.py`：本地 Driver 使用的 `FILES_DIR` 路径工具。
 - `backend/app/services/storage_drivers/`：S3 兼容驱动；**凭证来自 `storage_backends` 表列，或 `AWS_*` 环境变量**。  
 - `backend/app/services/storage_bootstrap.py`：列迁移、空库种子（可把 `.env` 中 `S3_*` 写入表）、旧 `storage_key` 迁移。  
 - `backend/app/services/node_service.py`：上传/下载/删除经 Driver，写 `blobs` 与 `nodes.blob_id`。  

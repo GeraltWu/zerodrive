@@ -30,7 +30,7 @@ export function FloatingUploadPanel({
       radius="md"
       withBorder
       style={{
-        width: 360,
+        width: 'min(360px, calc(100vw - 24px))',
         maxHeight: collapsed ? undefined : 320,
         overflow: 'hidden',
         backgroundColor: 'color-mix(in srgb, var(--mantine-color-body) 92%, transparent)',

@@ -15,7 +15,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 ## 环境变量
 
-见 `.env.example`：`DATA_ROOT`、`SQLITE_PATH`、管理员与 JWT、`CORS_ORIGINS`。
+见 `.env.example`：`FILES_DIR`、`DATABASE_DIR`、管理员与 JWT、`CORS_ORIGINS`。SQLite 文件名固定为 `zerodrive.db`。
 
 ### 存储：与 MinIO / S3 如何对接
 
@@ -59,11 +59,11 @@ python scripts/test_minio_connection.py
 
 ### 已有数据如何迁移（只做一次）
 
-适用于升级前：**只有 `nodes.storage_key`、文件在 `DATA_ROOT` 下** 的旧版。
+适用于升级前：**只有 `nodes.storage_key`、文件在 `FILES_DIR` 下** 的旧版。
 
-1. **备份**：复制 `SQLITE_PATH` 指向的 `.db` 文件，以及 `DATA_ROOT` 目录（磁盘上的 UUID 文件名不要动）。
+1. **备份**：复制 `DATABASE_DIR/zerodrive.db` 和整个 `FILES_DIR`（磁盘上的 UUID 文件名不要动）。
 2. **升级代码与依赖**后启动后端一次：会 **种子 `storage_backends`（若表为空）** → **迁移 `storage_key` → `blobs`** → **删除 `storage_key` 列**。
-3. 迁移完成后，**物理文件路径不变**：`blobs.object_key` 等于原来的 `storage_key`，仍指向 `DATA_ROOT` 下同一相对路径。
+3. 迁移完成后，**物理文件路径不变**：`blobs.object_key` 等于原来的 `storage_key`，仍指向 `FILES_DIR` 下同一相对路径。
 4. 若 SQLite 过旧无法 `DROP COLUMN`，需自行升级 SQLite / Python 环境，或手工用「建新表拷贝数据」方式去掉 `storage_key` 列后再启动。
 
 若旧数据已在对象存储、仅有库没有 `storage_key`，需另写脚本按 `docs/STORAGE_ARCHITECTURE.md` 往 `blobs` 插行并更新 `nodes.blob_id`，不在上述自动流程内。
@@ -83,6 +83,8 @@ python scripts/test_minio_connection.py
 
 ## 下载接口说明
 
-`GET /api/nodes/{node_id}/download` **不要求登录**：知道完整 URL 即可拉取文件（当前以节点 UUID 作为路径中的秘密，请勿把链接发到不可信场合）。列表、上传、删除等接口仍须登录。
+`GET /api/nodes/{node_id}/download` 要求登录，可使用浏览器的 HttpOnly 会话 Cookie 或 `Authorization: Bearer <token>`。网页中的预览和下载按钮仍可直接打开该地址。
+
+需要发给他人“一点即下载”的地址时，先创建公开分享链接，再使用 `GET /api/public/share/{token}/download`。该直链可停用，并支持过期时间、访问次数限制和访问记录。
 
 Bot 发图请使用 **`GET /api/bot/files/{node_id}/content`**（签名 URL），见 [`docs/zerodrive-API.md`](../docs/zerodrive-API.md) 第 4.5 节。

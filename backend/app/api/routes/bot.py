@@ -31,7 +31,7 @@ def _build_download_url(request: Request, node_id: str) -> str:
     exp = int(time.time()) + max(60, settings.bot_download_expire_seconds)
     sig = create_download_signature(node_id, exp)
     query = urlencode({"sig": sig, "exp": str(exp)})
-    base = str(request.base_url).rstrip("/")
+    base = (settings.public_base_url or str(request.base_url)).rstrip("/")
     return f"{base}/api/bot/files/{node_id}/content?{query}"
 
 

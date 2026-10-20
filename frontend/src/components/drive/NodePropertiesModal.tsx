@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import type { DriveNode } from '../../types/node'
@@ -29,11 +28,7 @@ export function NodePropertiesModal({
   onClose: () => void
 }) {
   const opened = node !== null
-  const [displayNode, setDisplayNode] = useState<DriveNode | null>(node)
-
-  useEffect(() => {
-    if (node) setDisplayNode(node)
-  }, [node])
+  const displayNode = node
 
   const copyValue = async (value: string, successMessage: string) => {
     const ok = await copyTextToClipboard(value)
@@ -82,7 +77,6 @@ export function NodePropertiesModal({
     <Modal
       opened={opened}
       onClose={onClose}
-      onExitTransitionEnd={() => setDisplayNode(null)}
       title={displayNode?.name || '属性'}
       size="lg"
       centered
@@ -105,7 +99,7 @@ export function NodePropertiesModal({
           <Text size="sm"><strong>修改时间：</strong>{new Date(displayNode.updated_at).toLocaleString()}</Text>
           <Text size="sm"><strong>节点 ID：</strong>{displayNode.id}</Text>
           <Text size="sm">
-            <strong>下载地址：</strong>
+            <strong>登录下载地址：</strong>
             {displayNode.is_folder ? (
               '—'
             ) : (

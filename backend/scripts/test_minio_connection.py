@@ -37,7 +37,7 @@ async def _main() -> int:
     from app.services.storage_drivers.s3 import S3StorageDriver
 
     get_settings.cache_clear()
-    _ = get_settings()  # 加载 .env 中的 SQLITE_PATH 等
+    _ = get_settings()  # 加载 .env 中的 FILES_DIR / DATABASE_DIR 等
 
     async with AsyncSessionLocal() as session:
         res = await session.execute(

@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.schemas.admin import UpdateUserBody
 from app.schemas.response import ok
 from app.services import admin_service
+from app.services.node_service import purge_storage_after_delete
 
 router = APIRouter()
 Db = Annotated[AsyncSession, Depends(get_db)]
@@ -40,5 +41,7 @@ async def delete_user(
     _admin: CurrentAdmin,
     db: Db,
 ) -> dict:
-    await admin_service.delete_user(db, target_id)
+    purged = await admin_service.delete_user(db, target_id)
+    await db.commit()
+    await purge_storage_after_delete(purged)
     return ok(None).model_dump()

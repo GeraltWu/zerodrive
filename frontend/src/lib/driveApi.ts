@@ -1,4 +1,4 @@
-import { api, clearAccessToken, setAccessToken, unwrap } from './api'
+import { api, clearAccessToken, getAccessToken, unwrap } from './api'
 import type { AccessLogPage, AdminUser, BreadcrumbItem, Collaborator, DriveNode, FolderTreeItem, ShareLink, ShareLinkPublicInfo, ShareLinkWithNode, SharedFolder } from '../types/node'
 
 export async function fetchRootId(): Promise<string> {
@@ -58,7 +58,7 @@ export function thumbnailUrl(nodeId: string, size = 200): string {
   return `/api/nodes/${nodeId}/thumbnail?size=${size}`
 }
 
-/** 浏览器可复制的完整 URL（公开下载，无需登录；请当作「谁拿到谁就能下」的私密链接） */
+/** 当前登录会话可直接打开的完整下载 URL。对外分享请使用 absoluteShareDownloadUrl。 */
 export function absoluteDownloadUrl(nodeId: string): string {
   if (typeof window === 'undefined') {
     return downloadUrl(nodeId)
@@ -93,9 +93,9 @@ export async function register(username: string, password: string): Promise<void
 }
 
 export async function login(username: string, password: string): Promise<void> {
-  const res = await api.post('/auth/login', { username, password })
-  const payload = unwrap<{ access_token: string; token_type: string; username: string }>(res.data)
-  setAccessToken(payload.access_token)
+  await api.post('/auth/login', { username, password })
+  // 新会话使用 HttpOnly Cookie；清理旧版 localStorage Token。
+  clearAccessToken()
 }
 
 export async function logout(): Promise<void> {
@@ -109,6 +109,15 @@ export async function logout(): Promise<void> {
 export async function me(): Promise<{ username: string; is_admin: boolean }> {
   const res = await api.get('/auth/me')
   return unwrap<{ username: string; is_admin: boolean }>(res.data)
+}
+
+export async function hasActiveSession(): Promise<boolean> {
+  const token = getAccessToken()
+  const response = await fetch('/api/auth/me', {
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return response.ok
 }
 
 // Collaborator APIs
@@ -268,6 +277,12 @@ export function shareDownloadUrl(token: string, accessToken?: string): string {
 export function absoluteShareUrl(token: string): string {
   if (typeof window === 'undefined') return `/s/${token}`
   return `${window.location.origin}/s/${token}`
+}
+
+export function absoluteShareDownloadUrl(token: string): string {
+  const path = `/api/public/share/${token}/download`
+  if (typeof window === 'undefined') return path
+  return new URL(path, window.location.origin).toString()
 }
 
 export async function listAccessLogs(params?: {

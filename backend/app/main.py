@@ -27,15 +27,15 @@ from app.services.node_service import (
     NodeNotFoundError,
     NodeValidationError,
 )
-from app.services.storage import ensure_data_root
+from app.services.storage import ensure_files_dir
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_dotenv()
     settings = get_settings()
-    pathlib.Path(settings.sqlite_path).parent.mkdir(parents=True, exist_ok=True)
-    ensure_data_root()
+    pathlib.Path(settings.database_path).parent.mkdir(parents=True, exist_ok=True)
+    ensure_files_dir()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Migration: add is_active column if upgrading from v1

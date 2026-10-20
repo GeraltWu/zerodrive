@@ -437,13 +437,19 @@ async def _collect_subtree_post_order(session: AsyncSession, nid: str) -> list[s
     return out
 
 
-async def delete_cascade(session: AsyncSession, node_id: str, user_id: str) -> list[tuple[str, str, str]]:
+async def delete_cascade(
+    session: AsyncSession,
+    node_id: str,
+    user_id: str,
+    *,
+    allow_root: bool = False,
+) -> list[tuple[str, str, str]]:
     """
     删除子树；返回待删存储对象列表 (backend_id, bucket, object_key)。
     须在事务 commit 成功后再执行物理删除。
     """
     node = await _get_or_404(session, node_id, user_id, min_role="editor")
-    if node.parent_id is None:
+    if node.parent_id is None and not allow_root:
         raise NodeValidationError("cannot delete root")
     ordered_ids = await _collect_subtree_post_order(session, node_id)
     blob_dec: defaultdict[str, int] = defaultdict(int)
@@ -527,9 +533,6 @@ async def copy_node(
         counter += 1
         name = f"{base_name} ({counter})"
 
-    # 递归拷贝文件/文件夹映射（旧的 blob_id → 新的 blob_id）
-    blob_map: dict[str, str] = {}
-
     async def _copy_tree(source_id: str, dest_parent_id: str) -> Node:
         source = await session.get(Node, source_id)
         if not source:
@@ -547,21 +550,11 @@ async def copy_node(
             updated_at=datetime.now(timezone.utc),
         )
         if source.blob_id:
-            if source.blob_id not in blob_map:
-                src_blob = await session.get(Blob, source.blob_id)
-                if src_blob:
-                    new_blob = Blob(
-                        id=str(uuid.uuid4()),
-                        storage_backend_id=src_blob.storage_backend_id,
-                        bucket=src_blob.bucket,
-                        object_key=src_blob.object_key,
-                        size=source.size,
-                        refcount=1,
-                    )
-                    session.add(new_blob)
-                    await session.flush()
-                    blob_map[source.blob_id] = new_blob.id
-            new_node.blob_id = blob_map.get(source.blob_id)
+            src_blob = await session.get(Blob, source.blob_id)
+            if not src_blob:
+                raise NodeValidationError("file content is missing")
+            src_blob.refcount += 1
+            new_node.blob_id = src_blob.id
         session.add(new_node)
         await session.flush()
 

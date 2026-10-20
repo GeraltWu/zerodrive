@@ -140,9 +140,11 @@ export function DriveContentPane({
               协作
             </Button>
           )}
-          <Button leftSection={<IconLink size={18} />} variant="subtle" onClick={onCreateShareLink}>
-            分享
-          </Button>
+          {canManageCollaborators && (
+            <Button leftSection={<IconLink size={18} />} variant="subtle" onClick={onCreateShareLink}>
+              分享
+            </Button>
+          )}
           <Menu shadow="md" width={140}>
             <Menu.Target>
               <ActionIcon variant="subtle" size="lg">

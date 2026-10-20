@@ -12,7 +12,6 @@ import {
   Title,
 } from '@mantine/core'
 import { IconDownload, IconFolder, IconLock, IconLogin } from '@tabler/icons-react'
-import { getAccessToken } from '../lib/api'
 import * as driveApi from '../lib/driveApi'
 import { FileTypeIcon } from '../lib/fileTypeIcon'
 import type { ShareLinkPublicInfo, DriveNode } from '../types/node'
@@ -42,21 +41,35 @@ export function PublicSharePage() {
   const [downloading, setDownloading] = useState(false)
   const [joining, setJoining] = useState(false)
   const [joined, setJoined] = useState(false)
-  const loggedIn = !!getAccessToken()
+  const [loggedIn, setLoggedIn] = useState(false)
+
+  useEffect(() => {
+    driveApi.hasActiveSession().then(setLoggedIn).catch(() => setLoggedIn(false))
+  }, [])
 
   useEffect(() => {
     if (!token) return
-    setLoading(true)
-    driveApi
-      .getPublicShareInfo(token)
-      .then((info) => {
-        setInfo(info)
-        setLoading(false)
-      })
-      .catch((err) => {
-        setError(err.message)
-        setLoading(false)
-      })
+    let active = true
+    const frame = requestAnimationFrame(() => {
+      setLoading(true)
+      setError(null)
+      driveApi
+        .getPublicShareInfo(token)
+        .then((info) => {
+          if (!active) return
+          setInfo(info)
+          setLoading(false)
+        })
+        .catch((err: unknown) => {
+          if (!active) return
+          setError(err instanceof Error ? err.message : '分享链接访问失败')
+          setLoading(false)
+        })
+    })
+    return () => {
+      active = false
+      cancelAnimationFrame(frame)
+    }
   }, [token])
 
   const handleVerifyPassword = async () => {

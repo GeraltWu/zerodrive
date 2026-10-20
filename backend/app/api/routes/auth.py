@@ -1,9 +1,10 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.api.deps import CurrentUser
+from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models.user import User
@@ -35,7 +36,7 @@ async def register(body: RegisterBody, db: Db = Depends(get_db)) -> dict:
 
 
 @router.post("/login")
-async def login(body: LoginBody, db: Db = Depends(get_db)) -> dict:
+async def login(body: LoginBody, response: Response, db: Db = Depends(get_db)) -> dict:
     q = select(User).where(User.username == body.username.strip())
     user = (await db.execute(q)).scalar_one_or_none()
     if not user or not verify_password(body.password, user.password_hash):
@@ -43,12 +44,28 @@ async def login(body: LoginBody, db: Db = Depends(get_db)) -> dict:
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已被禁用")
     token = create_access_token(user.id)
+    settings = get_settings()
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=token,
+        max_age=settings.jwt_expire_minutes * 60,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
     payload = LoginOut(access_token=token, username=user.username)
     return ok(payload.model_dump()).model_dump()
 
 
 @router.post("/logout")
-async def logout(_: CurrentUser) -> dict:
+async def logout(response: Response, _: CurrentUser) -> dict:
+    response.delete_cookie(
+        key=get_settings().session_cookie_name,
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
     return ok(None).model_dump()
 
 

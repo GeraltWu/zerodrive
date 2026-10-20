@@ -36,7 +36,7 @@
 Authorization: Bearer <access_token>
 ```
 
-**说明：** `access_token` 来自 `POST /api/auth/login` 的响应。校验失败时多为 **401**，响应体仍为上述包络。`POST /api/auth/register`、`POST /api/auth/login` 以及 **`GET /api/nodes/{node_id}/download`** 不要求该头（下载接口当前未校验 Token，集成时请注意安全）。
+**说明：** `access_token` 来自 `POST /api/auth/login` 的响应。浏览器登录还会设置 HttpOnly 会话 Cookie，因此页面内的媒体预览和下载无需自行拼接请求头。外部程序继续使用 Bearer Token。校验失败时多为 **401**，响应体仍为上述包络。
 
 **Bot 集成（QQ 机器人等）** 同样使用 JWT 认证，流程见 **第 4 节**。
 
@@ -408,7 +408,7 @@ Authorization: Bearer <access_token>
 
 ### 3.7 `GET /api/nodes/{node_id}/download`
 
-**说明：** 下载文件流；**不要求 Authorization**；支持 Range（`206`）便于音视频拖动。
+**说明：** 下载文件流；要求有效的浏览器会话 Cookie 或 `Authorization: Bearer <access_token>`，并检查节点访问权限；支持 Range（`206`）便于音视频拖动。
 
 **输入（Path）：**
 
@@ -419,6 +419,8 @@ Authorization: Bearer <access_token>
 ```
 
 **输出：** 非 JSON 包络。成功时为二进制流：`Content-Type: application/octet-stream`，`Content-Disposition: attachment; filename="..."`。失败可能为 **400**（不能下载文件夹）、**404**（无内容）等，错误体格式以实际响应为准。
+
+需要对外公开且点击即下载的链接时，创建分享链接后使用 `GET /api/public/share/{token}/download`。QQ Bot 使用第 4.5 节的短期签名下载地址。
 
 ---
 
@@ -637,7 +639,7 @@ Bot 代用户操作时：
       "id": "660e8400-e29b-41d4-a716-446655440001",
       "resolved_path": "/图片/奶龙"
     },
-    "download_url": "http://localhost:8000/api/bot/files/880e8400-e29b-41d4-a716-446655440003/content?sig=...&exp=...",
+    "download_url": "https://drive.example.com/api/bot/files/880e8400-e29b-41d4-a716-446655440003/content?sig=...&exp=...",
     "picked": "random"
   }
 }

@@ -5,15 +5,15 @@ import pathlib
 from app.core.config import get_settings
 
 
-def ensure_data_root() -> pathlib.Path:
+def ensure_files_dir() -> pathlib.Path:
     settings = get_settings()
-    root = pathlib.Path(settings.data_root).resolve()
+    root = pathlib.Path(settings.files_dir).resolve()
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
 def abs_path(storage_key: str) -> pathlib.Path:
-    base = ensure_data_root()
+    base = ensure_files_dir()
     rel = pathlib.Path(storage_key)
     if rel.is_absolute():
         raise ValueError("storage_key must be relative")

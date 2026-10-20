@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActionIcon, Box, Burger, Button, Drawer, Group, NavLink, Paper, Text, Title, useMantineColorScheme, useMantineTheme } from '@mantine/core'
+import { ActionIcon, Box, Burger, Button, Drawer, Group, Modal, NavLink, Paper, Text, Title, useMantineColorScheme, useMantineTheme } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
-import { Group as PanelGroup, Panel, Separator } from 'react-resizable-panels'
-import { IconArrowsMaximize, IconFiles, IconHistory, IconLink, IconMoon, IconShield, IconSun, IconX } from '@tabler/icons-react'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Group as PanelGroup, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels'
+import { IconArrowsMaximize, IconFiles, IconFolder, IconHistory, IconLink, IconMoon, IconShield, IconSun, IconX } from '@tabler/icons-react'
 import { AuthGuard } from './components/layout/AuthGuard'
 import { AppToolbar } from './components/layout/AppToolbar'
 import { DrivePage } from './pages/DrivePage'
@@ -21,18 +21,7 @@ import { PreviewPanel } from './components/drive/PreviewPanel'
 import type { UploadItem } from './components/drive/DriveContentPane'
 import { FloatingUploadPanel } from './components/drive/FloatingUploadPanel'
 import type { DriveNode } from './types/node'
-
-export type AppContext = {
-  isMobile: boolean; isAdmin: boolean
-  sidebarOpen: boolean; toggleSidebar: () => void
-  preview: PreviewData | null; setPreview: (p: PreviewData | null) => void
-  previewCollapsed: boolean; setPreviewCollapsed: (v: boolean) => void
-  mediaFiles: DriveNode[]; setMediaFiles: (f: DriveNode[]) => void
-  uploadItems: UploadItem[]; setUploadItems: (items: UploadItem[] | ((prev: UploadItem[]) => UploadItem[])) => void
-  onRemoveUploadItem: (id: string) => void
-}
-
-export function useAppContext() { return useOutletContext<AppContext>() }
+import type { AppContext } from './appContext'
 
 const navItems = [
   { path: '/', label: '我的文件', icon: IconFiles },
@@ -52,7 +41,7 @@ function AppLayout() {
   const [previewCollapsed, setPreviewCollapsed] = useState(false)
   const [mediaFiles, setMediaFiles] = useState<DriveNode[]>([])
   const [uploadItems, setUploadItems] = useState<UploadItem[]>([])
-  const previewPanelRef = useRef<any>(null)
+  const previewPanelRef = useRef<PanelImperativeHandle | null>(null)
   const onRemoveUploadItem = (id: string) => setUploadItems((prev) => prev.filter((x) => x.id !== id))
   const toggleSidebar = () => setSidebarOpen((v) => !v)
   const { pathname } = useLocation()
@@ -109,7 +98,7 @@ function AppLayout() {
       >
         <Group gap="xs">
           {isMobile && (
-            <Burger opened={navOpen} onClick={() => setNavOpen((v) => !v)} size="sm" />
+            <Burger opened={navOpen} onClick={() => setNavOpen((v) => !v)} size="sm" aria-label="打开主菜单" />
           )}
           <Title order={4}>ZeroDrive</Title>
         </Group>
@@ -118,11 +107,18 @@ function AppLayout() {
             variant="subtle"
             color="gray"
             onClick={() => setColorScheme(dark ? 'light' : 'dark')}
+            aria-label={dark ? '切换浅色模式' : '切换深色模式'}
           >
             {dark ? <IconSun size={18} /> : <IconMoon size={18} />}
           </ActionIcon>
           {isMobile && (
-            <Burger opened={sidebarOpen} onClick={toggleSidebar} size="sm" />
+            <ActionIcon
+              variant={sidebarOpen ? 'light' : 'subtle'}
+              onClick={toggleSidebar}
+              aria-label="打开目录树"
+            >
+              <IconFolder size={20} />
+            </ActionIcon>
           )}
           {!isMobile && (
             <Button
@@ -203,6 +199,26 @@ function AppLayout() {
             </>
           )}
         </PanelGroup>
+
+        {preview && isMobile && (
+          <Modal
+            opened
+            onClose={() => setPreview(null)}
+            fullScreen
+            withCloseButton={false}
+            padding={0}
+          >
+            <PreviewPanel
+              preview={preview}
+              mediaFiles={mediaFiles}
+              onClose={() => setPreview(null)}
+              onNavigate={(node) => {
+                const kind = getMediaPreviewKind(node.name)
+                if (kind) setPreview({ node, kind })
+              }}
+            />
+          </Modal>
+        )}
 
         {/* Bottom-right floating cards (stacked) */}
         {(uploadItems.length > 0 || (preview && !isMobile && previewCollapsed)) && (

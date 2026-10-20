@@ -31,6 +31,10 @@ conda activate zero_drive
 python scripts/migrate.py
 ```
 
+## Docker 部署
+
+使用宝塔面板、Docker Compose、HTTPS 反向代理部署时，参见 [ZeroDrive 宝塔面板 Docker 部署](docs/DEPLOY_BAOTA.md)。
+
 ## 新功能
 1. 添加最左边工具栏，放置需要切换页面的功能
 2. 记忆当前打开的目录，从其他页面跳转或者刷新时不要重置

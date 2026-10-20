@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import uuid
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
 from app.models.storage import LOCAL_BACKEND_ID, S3_BACKEND_ID, Blob, StorageBackend
+from app.models.node import Node
 
 
 async def ensure_node_blob_id_column(engine: AsyncEngine) -> None:
@@ -160,6 +161,34 @@ async def migrate_legacy_storage_keys_to_blobs(session: AsyncSession) -> None:
             text("UPDATE nodes SET blob_id = :bid WHERE id = :nid"),
             {"bid": blob.id, "nid": node_id},
         )
+    await session.commit()
+
+
+async def reconcile_blob_references(session: AsyncSession) -> None:
+    """修复旧版复制逻辑产生的重复 Blob，并让 refcount 与实际节点引用一致。"""
+    blobs = list((await session.execute(select(Blob).order_by(Blob.created_at, Blob.id))).scalars())
+    groups: dict[tuple[str, str, str], list[Blob]] = {}
+    for blob in blobs:
+        key = (blob.storage_backend_id, blob.bucket, blob.object_key)
+        groups.setdefault(key, []).append(blob)
+
+    for group in groups.values():
+        ids = [blob.id for blob in group]
+        refcount = int(
+            await session.scalar(
+                select(func.count(Node.id)).where(Node.blob_id.in_(ids))
+            )
+            or 0
+        )
+        primary = group[0]
+        if len(group) > 1:
+            await session.execute(
+                update(Node).where(Node.blob_id.in_(ids[1:])).values(blob_id=primary.id)
+            )
+            for duplicate in group[1:]:
+                await session.delete(duplicate)
+        primary.refcount = refcount
+
     await session.commit()
 
 

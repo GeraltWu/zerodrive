@@ -17,7 +17,7 @@
 | 项 | 说明 |
 |----|------|
 | 引擎 | **SQLite 3**（异步访问：`sqlite+aiosqlite`） |
-| 默认路径 | 由环境变量 `SQLITE_PATH` 指定，默认 `./data/zerodrive.db` |
+| 默认路径 | `DATABASE_DIR/zerodrive.db`，默认 `./data/database/zerodrive.db` |
 | 外键 | 连接时执行 `PRAGMA foreign_keys=ON` |
 | 建表 | 应用启动时 `Base.metadata.create_all`；部分列由启动脚本 `ALTER TABLE` 补齐 |
 
@@ -172,7 +172,7 @@ erDiagram
 
 | `id` | 典型用途 |
 |------|----------|
-| `00000000-0000-4000-8000-000000000002` | `LOCAL_BACKEND_ID` — 本地 `DATA_ROOT` |
+| `00000000-0000-4000-8000-000000000002` | `LOCAL_BACKEND_ID` — 本地 `FILES_DIR` |
 | `00000000-0000-4000-8000-000000000003` | `S3_BACKEND_ID` — 空库且 `STORAGE_DRIVER=s3` 时的默认 S3 行 |
 
 **业务规则：**
@@ -195,7 +195,7 @@ erDiagram
 | `id` | `VARCHAR(36)` | PK | UUID |
 | `storage_backend_id` | `VARCHAR(36)` | FK → `storage_backends.id`, **ON DELETE RESTRICT** | 对象所在逻辑后端 |
 | `bucket` | `VARCHAR(255)` | NOT NULL | S3 桶名；本地后端多为 `""` |
-| `object_key` | `VARCHAR(1024)` | NOT NULL | 对象键；本地为 `DATA_ROOT` 下相对路径（常为 UUID 文件名） |
+| `object_key` | `VARCHAR(1024)` | NOT NULL | 对象键；本地为 `FILES_DIR` 下相对路径（常为 UUID 文件名） |
 | `size` | `INTEGER` | NOT NULL | 字节数 |
 | `content_sha256` | `VARCHAR(64)` | NULL | 预留：去重 / 校验（当前上传未写入） |
 | `etag` | `VARCHAR(128)` | NULL | S3 返回的 ETag |
@@ -240,7 +240,7 @@ erDiagram
 
 ### 4.1 旧版 `storage_key` 迁移（一次性）
 
-适用于升级前库结构含 `nodes.storage_key`、文件在 `DATA_ROOT` 的情况：
+适用于升级前库结构含 `nodes.storage_key`、文件在 `FILES_DIR` 的情况：
 
 | 旧 | 新 |
 |----|-----|
@@ -292,7 +292,7 @@ erDiagram
 
 | `provider` | `blobs` 定位方式 |
 |------------|------------------|
-| `local` | `object_key` → `{DATA_ROOT}/{object_key}` 文件 |
+| `local` | `object_key` → `{FILES_DIR}/{object_key}` 文件 |
 | S3 兼容 | `endpoint_url` + `bucket` + `object_key` → PutObject / GetObject |
 
 `nodes.name` **仅用于展示与目录逻辑**；对象存储中的 key **不要求** 与 `name` 相同（通常为 UUID）。
@@ -303,7 +303,7 @@ erDiagram
 
 | 操作 | 建议 |
 |------|------|
-| 备份 | 复制 `SQLITE_PATH` 文件；对象存储另备桶数据或 `DATA_ROOT` |
+| 备份 | 复制 `DATABASE_DIR/zerodrive.db` 和 `FILES_DIR`；使用对象存储时另行备份桶数据 |
 | 查看默认后端 | `SELECT * FROM storage_backends WHERE is_default = 1` |
 | 查文件落在哪 | `SELECT n.id, n.name, b.object_key, b.bucket, sb.provider FROM nodes n JOIN blobs b ON n.blob_id = b.id JOIN storage_backends sb ON b.storage_backend_id = sb.id WHERE n.id = ?` |
 | 孤儿对象 | 库中无 `refcount>0` 引用但桶里仍有 key — 需 GC 脚本（未内置定时任务） |

@@ -52,7 +52,7 @@ import { DriveGrid } from '../components/drive/DriveGrid'
 import { DriveSidebar } from '../components/drive/DriveSidebar'
 import { DriveToolbar } from '../components/drive/DriveToolbar'
 import { NodePropertiesModal } from '../components/drive/NodePropertiesModal'
-import { useAppContext } from '../App'
+import { useAppContext } from '../appContext'
 import { ShareLinkDialog } from '../components/drive/ShareLinkDialog'
 import { copyTextToClipboard } from '../lib/clipboard'
 import { FileTypeIcon } from '../lib/fileTypeIcon'
@@ -107,9 +107,11 @@ function NodeTableRow({
   onProperties,
   showOwner,
   onCopyNode,
+  onCopyDirectLink,
   onToggleFavorite,
   isFavorited,
   onCreateShareLink,
+  canShare,
   mobile,
 }: {
   node: DriveNode
@@ -132,9 +134,11 @@ function NodeTableRow({
   onProperties: (n: DriveNode) => void
   showOwner: boolean
   onCopyNode: (n: DriveNode) => void
+  onCopyDirectLink: (n: DriveNode) => void
   onToggleFavorite: (n: DriveNode) => void
   isFavorited: boolean
   onCreateShareLink: (n: DriveNode) => void
+  canShare: boolean
   mobile: boolean
 }) {
   const drag = useDraggable({
@@ -301,20 +305,12 @@ function NodeTableRow({
                 下载
               </Menu.Item>
             )}
-            {!node.is_folder && (
+            {!node.is_folder && canShare && (
               <Menu.Item
                 leftSection={<IconCopy size={14} />}
-                onClick={() => {
-                  void (async () => {
-                    const ok = await copyTextToClipboard(driveApi.absoluteDownloadUrl(node.id))
-                    notifications.show({
-                      message: ok ? '下载链接已复制' : '复制失败，请手动复制',
-                      color: ok ? 'green' : 'red',
-                    })
-                  })()
-                }}
+                onClick={() => onCopyDirectLink(node)}
               >
-                复制下载链接
+                创建公开下载直链
               </Menu.Item>
             )}
             <Menu.Item
@@ -342,9 +338,11 @@ function NodeTableRow({
                 {isFavorited ? '取消收藏' : '添加到收藏'}
               </Menu.Item>
             )}
-            <Menu.Item leftSection={<IconLink size={14} />} onClick={() => onCreateShareLink(node)}>
-              分享
-            </Menu.Item>
+            {canShare && (
+              <Menu.Item leftSection={<IconLink size={14} />} onClick={() => onCreateShareLink(node)}>
+                分享
+              </Menu.Item>
+            )}
             <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => onProperties(node)}>
               属性
             </Menu.Item>
@@ -625,7 +623,6 @@ export function DrivePage() {
         setNav({ stack: [id], index: 0 })
       }
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Persist current folder on change
@@ -680,10 +677,7 @@ export function DrivePage() {
   // Search debounce
   useEffect(() => {
     const q = searchQuery.trim()
-    if (!q) {
-      setSearchResults([])
-      return
-    }
+    if (!q) return
     const timer = setTimeout(() => {
       driveApi.searchNodes(q).then(setSearchResults).catch(() => {})
     }, 300)
@@ -1113,7 +1107,7 @@ export function DrivePage() {
       }
       window.open(driveApi.downloadUrl(node.id), '_blank', 'noopener,noreferrer')
     },
-    [editingNodeId, navigateTo],
+    [editingNodeId, navigateTo, setPreview],
   )
 
   const newFolder = () => {
@@ -1170,8 +1164,13 @@ export function DrivePage() {
             setUploadItems((prev) => prev.filter((x) => x.id !== item.id))
             uploadControllersRef.current.delete(item.id)
           }, 3000)
-        } catch (err: any) {
-          if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED') return
+        } catch (err: unknown) {
+          const cancelled =
+            typeof err === 'object' &&
+            err !== null &&
+            (('name' in err && err.name === 'CanceledError') ||
+              ('code' in err && err.code === 'ERR_CANCELED'))
+          if (cancelled) return
           failed += 1
           setUploadItems((prev) =>
             prev.map((x) => (x.id === item.id ? { ...x, status: 'failed' } : x)),
@@ -1224,6 +1223,21 @@ export function DrivePage() {
 
   const handleCreateShareLink = useCallback((node: DriveNode) => {
     setShareLinkDialog({ nodeId: node.id, nodeName: node.name })
+  }, [])
+
+  const handleCopyDirectLink = useCallback(async (node: DriveNode) => {
+    try {
+      const link = await driveApi.createShareLink(node.id)
+      const copied = await copyTextToClipboard(driveApi.absoluteShareDownloadUrl(link.token))
+      notifications.show({
+        color: copied ? 'green' : 'yellow',
+        message: copied
+          ? '公开下载直链已创建并复制，可在「分享链接」中停用'
+          : '直链已创建，请到「分享链接」页面复制',
+      })
+    } catch {
+      // API interceptor 已显示具体错误。
+    }
   }, [])
 
   const handleCopyNode = useCallback(
@@ -1492,9 +1506,11 @@ export function DrivePage() {
                 onProperties={setPropertiesNode}
                 showOwner={isSharedFolder}
                 onCopyNode={handleCopyNode}
+                onCopyDirectLink={(node) => void handleCopyDirectLink(node)}
                 onToggleFavorite={handleToggleFavorite}
                 isFavorited={favoriteIds.has(n.id)}
                 onCreateShareLink={handleCreateShareLink}
+                canShare={canManageCollaborators}
                 mobile={isMobile}
               />
             ))}
@@ -1507,6 +1523,7 @@ export function DrivePage() {
                   onRowClick={handleRowClick}
                   onRowContextMenu={handleRowContextMenu}
                   onRowDoubleClick={handleRowDoubleClick}
+                  mobile={isMobile}
                 />
               ) : null
             }
@@ -1538,13 +1555,7 @@ export function DrivePage() {
                 }}
                 onCopyLink={(node) => {
                   closeContextMenu()
-                  void (async () => {
-                    const ok = await copyTextToClipboard(driveApi.absoluteDownloadUrl(node.id))
-                    notifications.show({
-                      message: ok ? '下载链接已复制' : '复制失败，请手动复制',
-                      color: ok ? 'green' : 'red',
-                    })
-                  })()
+                  void handleCopyDirectLink(node)
                 }}
                 onCopyName={(node) => {
                   closeContextMenu()

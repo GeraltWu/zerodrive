@@ -57,6 +57,7 @@ export function DriveContextMenu({
   const effectiveOpened = opened && (showSingleNodeItems || showBatchDelete || (hasClipboard && !showSingleNodeItems && !showBatchDelete))
   const isShared = sharedRole !== null
   const canModify = !isShared || sharedRole === 'admin'
+  const canShare = !isShared || sharedRole === 'admin'
 
   return (
     <Menu opened={effectiveOpened} onChange={onOpenChange} position="bottom-start" shadow="md">
@@ -94,9 +95,9 @@ export function DriveContextMenu({
                 下载
               </Menu.Item>
             )}
-            {!targetNode.is_folder && (
+            {!targetNode.is_folder && canShare && (
               <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onCopyLink(targetNode)}>
-                复制下载链接
+                创建公开下载直链
               </Menu.Item>
             )}
             <Menu.Item leftSection={<IconCopy size={14} />} onClick={() => onCopyName(targetNode)}>
@@ -121,7 +122,7 @@ export function DriveContextMenu({
             <Menu.Item leftSection={<IconInfoCircle size={14} />} onClick={() => onProperties(targetNode)}>
               属性
             </Menu.Item>
-            {canModify && (
+            {canShare && (
               <Menu.Item leftSection={<IconLink size={14} />} onClick={() => onCreateShareLink(targetNode)}>
                 分享
               </Menu.Item>

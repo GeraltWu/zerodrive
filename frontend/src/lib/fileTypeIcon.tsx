@@ -14,6 +14,7 @@ import {
   IconVideo,
 } from '@tabler/icons-react'
 import type { DriveNode } from '../types/node'
+import { IMAGE_EXTENSIONS } from './fileTypes'
 
 type MantineColorName =
   | 'gray'
@@ -63,22 +64,6 @@ const VIDEO = new Set([
   'mpg',
   '3gp',
   'ts',
-])
-
-export const IMAGE = new Set([
-  'jpg',
-  'jpeg',
-  'png',
-  'gif',
-  'webp',
-  'bmp',
-  'svg',
-  'ico',
-  'heic',
-  'heif',
-  'avif',
-  'tif',
-  'tiff',
 ])
 
 const CODE = new Set([
@@ -148,7 +133,7 @@ function visualFor(node: DriveNode): { Icon: TablerIcon; color: MantineColorName
 
   if (AUDIO.has(ext)) return { Icon: IconMusic, color: 'violet' }
   if (VIDEO.has(ext)) return { Icon: IconVideo, color: 'pink' }
-  if (IMAGE.has(ext)) return { Icon: IconPhoto, color: 'cyan' }
+  if (IMAGE_EXTENSIONS.has(ext)) return { Icon: IconPhoto, color: 'cyan' }
   if (ext === 'pdf') return { Icon: IconFileTypePdf, color: 'red' }
   if (SLIDE.has(ext)) return { Icon: IconPresentation, color: 'orange' }
   if (SHEET.has(ext)) return { Icon: IconFileSpreadsheet, color: 'green' }
